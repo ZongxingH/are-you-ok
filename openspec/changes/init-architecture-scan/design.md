@@ -17,7 +17,6 @@ The generated architecture files are placeholders, not final authority. The acti
 
 - Run init in an empty temporary directory and confirm `project_mode=empty`.
 - Run init in a non-empty temporary directory and confirm architecture markdown files are generated.
-- Run `npm run verify-env`.
 
 ## Risks
 
