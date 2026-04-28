@@ -27,21 +27,15 @@ npx github:ZongxingH/are-you-ok install --target all --lang zh
 Choose one target:
 
 ```text
-codex  -> install ~/.codex/skills/auok*/SKILL.md
-claude -> install ~/.claude/commands/auok*.md
+codex  -> install ~/.codex/skills/auok/SKILL.md
+claude -> install ~/.claude/commands/auok.md
 all    -> install both
 ```
 
-The install command creates the main `auok` entry plus role skills/commands:
+The install command exposes only the main `auok` entry. Internal roles are coordinated by the Orchestrator and are not installed as separate user-facing commands:
 
 ```text
 auok
-auok-architect
-auok-spec
-auok-dev
-auok-qa
-auok-review
-auok-archive
 ```
 
 Choose command language:
@@ -57,7 +51,6 @@ Use auok inside Codex or Claude:
 
 ```text
 /auok init
-/auok proposal "implement a concrete requirement"
 /auok auto "implement a concrete requirement"
 /auok status <change-id>
 /auok archive <change-id>
@@ -68,12 +61,12 @@ Use auok inside Codex or Claude:
 The workflow has three phases:
 
 ```text
-proposal -> create or update the OpenSpec change
-auto     -> orchestrate Spec, Dev, QA, Review, and Archive agents
-archive  -> final user confirmation after verification passes
+init    -> prepare auok workspace and architecture context
+auto    -> internally run proposal, Dev, QA, Review, and Archive agents
+archive -> final user confirmation after verification passes
 ```
 
-`/auok auto` coordinates multiple independent agents. The user does not need to manually decide which agent runs next.
+After `/auok init`, `/auok auto "需求"` is the main development flow: the current main Agent acts as Orchestrator, coordinates internal Spec, Dev, QA, Review, and Archive agents, completes requirement development, and stops at `ready_for_archive`. The user should only need to intervene for final `/auok archive <change-id>` confirmation or a true blocker.
 
 ## Output
 
@@ -88,6 +81,6 @@ auok/
   runs/           # run results, reports, gates
 ```
 
-For existing projects, `auok-architect` performs model-driven architecture analysis. It should include module-level technology evidence such as Redis, MongoDB, MySQL, Nacos, Kafka, RabbitMQ, and other common middleware when supported by dependencies, config, or source markers.
+For existing projects, the internal Architect Agent performs model-driven architecture analysis. It should include module-level technology evidence such as Redis, MongoDB, MySQL, Nacos, Kafka, RabbitMQ, and other common middleware when supported by dependencies, config, or source markers.
 
 When `/auok auto` finishes successfully, it stops at `ready_for_archive`. Run `/auok archive <change-id>` to confirm archive.
