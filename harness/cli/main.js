@@ -48,16 +48,12 @@ Lifecycle:
   auok init [--home auok] [--lang zh|en]
   auok install --target codex|claude|all [--lang zh|en] [--dry-run]
   auok new <change-id>
-  auok ff <change-id>
   auok status [change-id] [--json]
   auok validate [change-id|--all]
-  auok apply <change-id>
   auok verify <change-id>
-  auok sync <change-id>
   auok archive <change-id>
 
-Automation:
-  auok auto "<goal>"
+Agent State:
   auok agent status [change-id]
   auok agent resume <change-id>
   auok agent handoff <change-id> --from qa --to dev
@@ -123,16 +119,6 @@ async function main() {
     return print(installCommands({ target: args.target || "all", lang: args.lang || "zh", dryRun: args.dryRun }), args.json);
   }
   if (command === "new") return print(createChange(requireChange(args)), args.json);
-  if (command === "ff") {
-    const change = requireChange(args);
-    createChange(change);
-    const state = lifecycle.loadState(change);
-    state.state = "spec_review";
-    lifecycle.markAgent(state, "spec", "done", { artifacts: ["proposal.md", "design.md", "tasks.md"] });
-    lifecycle.addEvidence(state, { type: "spec", command: `auok ff ${change}`, status: "done" });
-    lifecycle.saveState(state);
-    return print({ change, status: "spec_ready", next: lifecycle.inferNext(state) }, args.json);
-  }
   if (command === "status") {
     const change = args._[1];
     if (!change) return print(lifecycle.summarizeStates(), args.json);
@@ -145,22 +131,6 @@ async function main() {
     print(result, args.json);
     if (!result.passed) process.exitCode = 1;
     return;
-  }
-  if (command === "apply") {
-    const change = requireChange(args);
-    const state = lifecycle.loadState(change);
-    state.state = "qa_running";
-    lifecycle.markAgent(state, "dev", "done", { command: `auok apply ${change}` });
-    lifecycle.addEvidence(state, { type: "apply", command: `auok apply ${change}`, status: "done" });
-    lifecycle.saveState(state);
-    return print({ change, status: "applied", next: lifecycle.inferNext(state) }, args.json);
-  }
-  if (command === "sync") {
-    const change = requireChange(args);
-    const state = lifecycle.loadState(change);
-    lifecycle.addEvidence(state, { type: "sync", command: `auok sync ${change}`, status: "noop" });
-    lifecycle.saveState(state);
-    return print({ change, status: "synced", note: "No spec delta merge required in local implementation" }, args.json);
   }
   if (command === "verify") {
     const change = requireChange(args);
@@ -177,20 +147,6 @@ async function main() {
       process.exitCode = 1;
     }
     return;
-  }
-  if (command === "auto") {
-    const goal = args._.slice(1).join(" ");
-    if (!goal) throw new Error("Missing goal");
-    const change = args.change || lifecycle.slugify(goal);
-    const created = createChange(change, goal);
-    const state = lifecycle.loadState(change);
-    state.state = "spec_review";
-    lifecycle.markAgent(state, "orchestrator", "done", { goal });
-    lifecycle.markAgent(state, "spec", "done", { artifacts: ["proposal.md", "design.md", "tasks.md"] });
-    lifecycle.addEvidence(state, { type: "auto", command: `auok auto ${goal}`, status: "created" });
-    lifecycle.saveState(state);
-    const verified = await verifyChange(change, { ...args, out: args.out || change });
-    return print({ ...created, auto: verified }, args.json);
   }
   if (command === "agent") {
     const sub = args._[1];
@@ -211,11 +167,6 @@ async function main() {
       if (!args.from || !args.to) throw new Error("Missing --from or --to");
       return print(lifecycle.createHandoff(change, args.from, args.to), args.json);
     }
-    if (sub === "approve") {
-      const change = args._[2];
-      if (!change) throw new Error("Missing <change-id>");
-      return print(lifecycle.approve(change, args.action || "archive"), args.json);
-    }
     throw new Error(`Unknown agent command: ${sub}`);
   }
   if (command === "list" && args._[1] === "scenarios") {
@@ -231,7 +182,7 @@ async function main() {
   if (command === "run") {
     const result = await run({
       scenarioId: args._[1],
-      capability: args.capability || (args.change ? "smoke" : undefined),
+      capability: args.capability,
       adapter: args.adapter,
       out: args.out
     });
@@ -252,20 +203,17 @@ async function main() {
 
 async function verifyChange(change, args = {}) {
   const state = lifecycle.loadState(change);
+  state.state = "qa_running";
   const validation = validate({ change });
   lifecycle.markGate(state, "openspec_validate", validation.passed ? "pass" : "fail", { errors: validation.errors });
   lifecycle.addEvidence(state, { type: "validate", command: `auok validate ${change}`, result: validation });
 
   if (!validation.passed) {
     state.state = "openspec_invalid";
-    lifecycle.markAgent(state, "review", "failed", { reason: "validation failed" });
+    lifecycle.markAgent(state, "qa", "failed", { reason: "validation failed" });
     lifecycle.saveState(state);
     return { change, passed: false, validate: validation, next: lifecycle.inferNext(state) };
   }
-
-  lifecycle.markAgent(state, "review", "done", { phase: "spec_review" });
-  lifecycle.markAgent(state, "dev", "done", { phase: "apply" });
-  state.state = "qa_running";
 
   const outDir = args.out || change;
   const runResult = await run({
@@ -296,19 +244,15 @@ async function verifyChange(change, args = {}) {
   if (!gateResult.passed) {
     state.state = "qa_failed";
     lifecycle.markAgent(state, "qa", "failed", { run_dir: resolvedOutDir });
-    lifecycle.markAgent(state, "review", "pending");
     lifecycle.createHandoff(change, "qa", "dev");
     lifecycle.saveState(state);
     return { change, passed: false, validate: validation, run: runResult, grade: gradeResult, report: reportPath, gate: gateResult, next: lifecycle.inferNext(state) };
   }
 
-  state.state = "ready_for_archive";
+  state.state = "qa_verified";
   lifecycle.markAgent(state, "qa", "done", { run_dir: resolvedOutDir });
-  lifecycle.markAgent(state, "review", "done", { findings: [] });
-  lifecycle.markAgent(state, "archive", "ready", { requires_human_approval: true });
-  lifecycle.markGate(state, "review", "pass");
-  state.human_approval.status = "requested";
-  state.human_approval.requested_at = new Date().toISOString();
+  lifecycle.markAgent(state, "review", "pending");
+  lifecycle.createHandoff(change, "qa", "review");
   lifecycle.saveState(state);
 
   return {
@@ -373,93 +317,6 @@ function isEmptyProject() {
   return listProjectEntries().length === 0;
 }
 
-function listProjectFiles(limit = 300) {
-  const ignoredDirs = new Set([...IGNORE_PROJECT_ENTRIES, "runs"]);
-  const out = [];
-  function visit(dir) {
-    if (out.length >= limit) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (out.length >= limit) return;
-      if (isIgnoredProjectEntry(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      const relative = path.relative(process.cwd(), full);
-      if (entry.isDirectory()) {
-        if (!ignoredDirs.has(entry.name)) visit(full);
-      } else if (entry.isFile()) {
-        out.push(relative);
-      }
-    }
-  }
-  visit(process.cwd());
-  return out.sort();
-}
-
-function readJsonIfExists(file) {
-  if (!fs.existsSync(file)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch (_error) {
-    return null;
-  }
-}
-
-function detectTechStack(files) {
-  const stack = [];
-  const has = (name) => files.includes(name) || fs.existsSync(path.join(process.cwd(), name));
-  const packageJson = readJsonIfExists(path.join(process.cwd(), "package.json"));
-  if (packageJson) {
-    stack.push("Node.js / npm package");
-    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-    for (const [pkg, label] of [
-      ["react", "React"],
-      ["next", "Next.js"],
-      ["vue", "Vue"],
-      ["vite", "Vite"],
-      ["typescript", "TypeScript"],
-      ["jest", "Jest"],
-      ["vitest", "Vitest"],
-      ["playwright", "Playwright"]
-    ]) {
-      if (deps[pkg]) stack.push(label);
-    }
-  }
-  if (has("pom.xml")) stack.push("Java / Maven");
-  if (has("build.gradle") || has("build.gradle.kts")) stack.push("Java/Kotlin / Gradle");
-  if (has("pyproject.toml") || has("requirements.txt")) stack.push("Python");
-  if (has("go.mod")) stack.push("Go");
-  if (has("Cargo.toml")) stack.push("Rust");
-  if (has("Dockerfile")) stack.push("Docker");
-  return [...new Set(stack)];
-}
-
-function detectEntryPoints(files) {
-  return files.filter((file) => [
-    "package.json",
-    "src/main.ts",
-    "src/main.js",
-    "src/index.ts",
-    "src/index.js",
-    "src/app.ts",
-    "src/app.js",
-    "main.py",
-    "app.py",
-    "cmd/main.go",
-    "go.mod",
-    "pom.xml",
-    "build.gradle",
-    "Cargo.toml"
-  ].includes(file) || /^cmd\/[^/]+\/main\.go$/.test(file));
-}
-
-function detectTests(files) {
-  return files.filter((file) => /(^|\/)(test|tests|__tests__)\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file));
-}
-
-function detectModules() {
-  const entries = listProjectEntries().filter((entry) => entry.isDirectory);
-  return entries.map((entry) => entry.name).filter((name) => !isIgnoredProjectEntry(name));
-}
-
 function writeArchitectureDocs(options = {}) {
   const lang = options.lang || "zh";
   ensureDir(home.resolveInHome("architecture"));
@@ -467,11 +324,6 @@ function writeArchitectureDocs(options = {}) {
     return { mode: "empty", files: [] };
   }
 
-  const files = listProjectFiles();
-  const stack = detectTechStack(files);
-  const entryPoints = detectEntryPoints(files);
-  const tests = detectTests(files);
-  const modules = detectModules();
   const generated = [];
 
   const writeArchitecture = (name, content) => {
@@ -483,124 +335,98 @@ function writeArchitectureDocs(options = {}) {
   if (lang === "en") {
     writeArchitecture("overview.md", `# Architecture Overview
 
-## Project Type
+## Status
 
-${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- Unknown from file scan"}
-
-## Evidence
-
-- Scanned project root: \`${process.cwd()}\`
-- Business files found: ${files.length}
-- Entry points found: ${entryPoints.length}
-- Top-level modules found: ${modules.length}
+- Pending model-driven analysis by the auok architect skill.
 
 ## Notes
 
-This document is generated from a read-only file scan during \`auok init\`. It should be refined by the Spec Agent when the first real change is proposed.
+The backend only creates deterministic placeholders. The active model session must inspect project evidence and complete this document.
 `);
 
     writeArchitecture("tech-stack.md", `# Tech Stack
 
-${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- No framework or language marker was confidently detected."}
-
-## Marker Files
-
-${files.filter((file) => /^(package\.json|pom\.xml|build\.gradle|build\.gradle\.kts|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|Dockerfile)$/.test(file)).map((file) => `- \`${file}\``).join("\n") || "- No common marker files found."}
+- Pending model-driven analysis by the auok architect skill.
+- Include file evidence for every language, framework, middleware, and external service conclusion.
 `);
 
     writeArchitecture("modules.md", `# Modules
 
-## Top-Level Directories
+- Pending model-driven analysis by the auok architect skill.
+- Include module responsibility and evidence.
+`);
 
-${modules.length ? modules.map((item) => `- \`${item}/\``).join("\n") : "- No top-level module directories found."}
+    writeArchitecture("module-tech-stack.md", `# Module Tech Stack
 
-## Top-Level Files
-
-${listProjectEntries().filter((entry) => entry.isFile).map((entry) => `- \`${entry.name}\``).join("\n") || "- No top-level files found."}
+- Pending model-driven analysis by the auok architect skill.
+- Include module-level technologies such as Redis, MongoDB, MySQL, Nacos, Kafka, RabbitMQ, Spring Boot, and others only when supported by file evidence.
 `);
 
     writeArchitecture("entrypoints.md", `# Entrypoints
 
-${entryPoints.length ? entryPoints.map((file) => `- \`${file}\``).join("\n") : "- No common entry point was detected."}
+- Pending model-driven analysis by the auok architect skill.
+- Include file evidence for every entrypoint.
 `);
 
     writeArchitecture("test-strategy.md", `# Test Strategy
 
-## Detected Tests
-
-${tests.length ? tests.slice(0, 80).map((file) => `- \`${file}\``).join("\n") : "- No test files were detected from common naming patterns."}
-
-## Notes
-
-QA Agent should validate the actual test command before relying on this generated summary.
+- Pending model-driven analysis by the auok architect skill.
+- Include test framework, test locations, and verified commands when evidence exists.
 `);
 
     writeArchitecture("risks.md", `# Architecture Risks
 
 - This is an initial scan, not a full architecture review.
-- Dynamic runtime behavior, external services, and deployment topology may be missing.
-- Generated summaries must be treated as starting context for future Spec/Dev/QA/Review agents.
+- The active model session must replace placeholders with evidence-backed findings.
+- Unknown areas should remain marked as unknown instead of guessed.
 `);
   } else {
     writeArchitecture("overview.md", `# 架构概览
 
-## 项目类型
+## 状态
 
-${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- 文件扫描未能明确识别项目类型"}
-
-## 证据
-
-- 扫描项目根目录：\`${process.cwd()}\`
-- 发现业务文件数：${files.length}
-- 发现入口线索数：${entryPoints.length}
-- 发现顶层模块数：${modules.length}
+- 待 auok architect skill 基于大模型完成架构分析。
 
 ## 说明
 
-本文档由 \`auok init\` 基于只读文件扫描生成。它是后续 Spec Agent 工作的初始上下文，不是最终架构结论。
+backend 只创建确定性占位文件。当前大模型会话必须通读项目证据并补全本文档。
 `);
 
     writeArchitecture("tech-stack.md", `# 技术栈
 
-${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- 未从常见标记文件中可靠识别语言或框架。"}
-
-## 标记文件
-
-${files.filter((file) => /^(package\.json|pom\.xml|build\.gradle|build\.gradle\.kts|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|Dockerfile)$/.test(file)).map((file) => `- \`${file}\``).join("\n") || "- 未发现常见标记文件。"}
+- 待 auok architect skill 基于大模型完成分析。
+- 所有语言、框架、中间件、外部服务结论都必须带文件证据。
 `);
 
     writeArchitecture("modules.md", `# 模块结构
 
-## 顶层目录
+- 待 auok architect skill 基于大模型完成分析。
+- 需要输出模块职责和证据文件。
+`);
 
-${modules.length ? modules.map((item) => `- \`${item}/\``).join("\n") : "- 未发现顶层模块目录。"}
+    writeArchitecture("module-tech-stack.md", `# 模块技术栈
 
-## 顶层文件
-
-${listProjectEntries().filter((entry) => entry.isFile).map((entry) => `- \`${entry.name}\``).join("\n") || "- 未发现顶层文件。"}
+- 待 auok architect skill 基于大模型完成分析。
+- 只有存在文件证据时，才输出 Redis、MongoDB、MySQL、Nacos、Kafka、RabbitMQ、Spring Boot 等模块级技术栈。
 `);
 
     writeArchitecture("entrypoints.md", `# 入口
 
-${entryPoints.length ? entryPoints.map((file) => `- \`${file}\``).join("\n") : "- 未发现常见入口文件。"}
+- 待 auok architect skill 基于大模型完成分析。
+- 每个入口结论都必须带文件证据。
 `);
 
     writeArchitecture("test-strategy.md", `# 测试策略
 
-## 已发现测试
-
-${tests.length ? tests.slice(0, 80).map((file) => `- \`${file}\``).join("\n") : "- 未通过常见命名模式发现测试文件。"}
-
-## 说明
-
-QA Agent 在依赖本文档前，应先验证项目真实测试命令。
+- 待 auok architect skill 基于大模型完成分析。
+- 存在证据时，需要输出测试框架、测试位置和已验证命令。
 `);
 
     writeArchitecture("risks.md", `# 架构风险
 
-- 这是初始化扫描结果，不是完整架构评审。
-- 动态运行行为、外部服务和部署拓扑可能缺失。
-- 生成摘要只能作为后续 Spec/Dev/QA/Review Agent 的初始上下文。
+- 这是初始化占位文件，不是完整架构评审。
+- 当前大模型会话必须用有证据的结论替换占位内容。
+- 证据不足的区域应保留为未知，不要猜测。
 `);
   }
 
@@ -660,13 +486,6 @@ function initHome(options = {}) {
     project_mode: architecture.mode,
     architecture
   };
-}
-
-function inferNext(state) {
-  if (state.state === "created") return { agent: "spec", command: `auok ff ${state.change}` };
-  if (state.state === "qa_failed") return { agent: "dev", command: `auok agent handoff ${state.change} --from qa --to dev` };
-  if (state.state === "ready_for_archive") return { agent: "human", command: `auok archive ${state.change}` };
-  return { agent: "orchestrator", command: `auok status ${state.change}` };
 }
 
 main().catch((error) => {

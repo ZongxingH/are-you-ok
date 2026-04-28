@@ -6,15 +6,12 @@
 
 1. Ignore generated/cache/system entries such as `.git`, `auok`, `.auok`, `node_modules`, `dist`, `build`, and hidden local directories.
 2. If no business files remain, treat the repository as empty and only create `auok/architecture/`.
-3. If business files exist, run a deterministic read-only scan:
-   - detect common marker files such as `package.json`, `pom.xml`, `go.mod`, `pyproject.toml`, and `Cargo.toml`
-   - identify common entry points
-   - list top-level modules
-   - identify common test file patterns
-4. Write generated summaries under `auok/architecture/`.
+3. If business files exist, write deterministic placeholder drafts under `auok/architecture/`.
+4. Do not hard-code architecture analysis in the backend. Backend init only materializes the workspace and placeholders.
 5. Use `--lang zh|en` to choose generated document language. Default is `zh`.
+6. The `/auok init` skill instructs the active model session to use `auok-architect` for architecture analysis, including module responsibility, entrypoints, build/test strategy, and middleware/framework evidence.
 
-The generated architecture is starting context, not final authority. Future agents should refine it as they work.
+The generated architecture files are placeholders, not final authority. The active model session should complete them during init, and future agents should continue refining them as they work.
 
 ## Verification
 
@@ -24,5 +21,5 @@ The generated architecture is starting context, not final authority. Future agen
 
 ## Risks
 
-- File-pattern detection can miss uncommon frameworks.
-- Generated architecture can be incomplete; documents must state that they are initial scan output.
+- If the active model session skips the Architect skill, architecture files will remain placeholders.
+- Architecture conclusions must cite evidence to avoid model hallucination.

@@ -7,10 +7,12 @@ It uses OpenSpec to manage specs and acceptance criteria, uses Superpowers to gu
 In short:
 
 ```text
-OpenSpec defines what to build
-Superpowers guides how agents work
-auok coordinates agents, verification, state, and archive
+Spec / OpenSpec = specification layer: defines what to build with structured requirements, interfaces, and acceptance criteria.
+Superpowers = discipline layer: defines how agents work through reusable engineering skills such as TDD, review, and verification.
+Harness / auok = orchestration layer: defines who does the work and how it is coordinated through roles, scheduling, permissions, state, evidence, and archive.
 ```
+
+The backend is intentionally deterministic. Architecture analysis, spec refinement, implementation, QA diagnosis, review, and archive readiness are performed by the installed agent skills, not by hardcoded backend intelligence.
 
 ## Install
 
@@ -25,9 +27,21 @@ npx github:ZongxingH/are-you-ok install --target all --lang zh
 Choose one target:
 
 ```text
-codex  -> install ~/.codex/skills/auok/SKILL.md
-claude -> install ~/.claude/commands/auok.md
+codex  -> install ~/.codex/skills/auok*/SKILL.md
+claude -> install ~/.claude/commands/auok*.md
 all    -> install both
+```
+
+The install command creates the main `auok` entry plus role skills/commands:
+
+```text
+auok
+auok-architect
+auok-spec
+auok-dev
+auok-qa
+auok-review
+auok-archive
 ```
 
 Choose command language:
@@ -35,12 +49,6 @@ Choose command language:
 ```text
 zh -> Chinese interaction instructions, default
 en -> English interaction instructions
-```
-
-After auok is published to npm, this shorter form can also be used:
-
-```bash
-npx auok install --target all --lang zh
 ```
 
 ## Use
@@ -55,7 +63,7 @@ Use auok inside Codex or Claude:
 /auok archive <change-id>
 ```
 
-`/auok init` prepares the `auok/` workspace. If the project is empty, it only creates the base workspace and an empty architecture directory. If the project already has code, auok scans the repository and writes an initial architecture summary. The generated architecture documents use the installed command language; Chinese is the default.
+`/auok init` prepares the `auok/` workspace. If the project is empty, it only creates the base workspace and an empty architecture directory. If the project already has code, auok first creates deterministic architecture drafts, then the current model session analyzes project evidence and refines `auok/architecture/`. The generated architecture documents use the installed command language; Chinese is the default.
 
 The workflow has three phases:
 
@@ -79,5 +87,7 @@ auok/
   harness/        # scenarios and schemas
   runs/           # run results, reports, gates
 ```
+
+For existing projects, `auok-architect` performs model-driven architecture analysis. It should include module-level technology evidence such as Redis, MongoDB, MySQL, Nacos, Kafka, RabbitMQ, and other common middleware when supported by dependencies, config, or source markers.
 
 When `/auok auto` finishes successfully, it stops at `ready_for_archive`. Run `/auok archive <change-id>` to confirm archive.

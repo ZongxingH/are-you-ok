@@ -9,17 +9,20 @@ auok init should give the harness enough project context for later Spec, Dev, QA
 - Always create `auok/architecture/`.
 - Detect whether the target repository is empty after ignoring generated/cache directories.
 - For empty projects, only create the architecture directory.
-- For non-empty projects, perform a read-only file scan and write architecture documents:
+- For non-empty projects, write placeholder architecture documents:
   - `overview.md`
   - `tech-stack.md`
+  - `module-tech-stack.md`
   - `modules.md`
   - `entrypoints.md`
   - `test-strategy.md`
   - `risks.md`
-- Generate architecture document text in the selected language; default to Chinese.
+- Generate architecture placeholder text in the selected language; default to Chinese.
+- Treat backend output as deterministic placeholders only.
+- Require the active model session to use `auok-architect` to complete architecture docs during `/auok init`, including module-level technology and middleware evidence such as Redis, MongoDB, MySQL, Nacos, Kafka, and RabbitMQ when supported by dependencies, config, and source markers.
 
 ## Out of Scope
 
-- Deep semantic source-code analysis.
+- Deep semantic source-code analysis in backend code.
 - Calling external LLMs during init.
 - Modifying business project files outside `auok/`.

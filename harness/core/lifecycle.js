@@ -19,10 +19,6 @@ function handoffFile(change, from, to) {
   return home.resolveInHome("orchestration", "handoffs", change, `${from}-to-${to}.json`);
 }
 
-function slugify(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "auto-change";
-}
-
 function defaultState(change, goal = "") {
   return {
     change,
@@ -125,32 +121,20 @@ function createHandoff(change, from, to) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
-function approve(change, action = "archive") {
-  const state = loadState(change);
-  state.human_approval = state.human_approval || {};
-  state.human_approval.status = "approved";
-  state.human_approval.action = action;
-  state.human_approval.approved_at = new Date().toISOString();
-  addEvidence(state, { type: "approval", action });
-  saveState(state);
-  return { change, action, status: "approved" };
-}
-
 function inferNext(state) {
-  if (state.state === "created") return { agent: "spec", command: `auok ff ${state.change}` };
+  if (state.state === "created") return { agent: "spec", command: "refine proposal/design/tasks/spec delta" };
   if (state.state === "spec_review") return { agent: "review", command: `auok validate ${state.change}` };
-  if (state.state === "implementing") return { agent: "dev", command: `auok apply ${state.change}` };
+  if (state.state === "implementing") return { agent: "dev", command: "implement the approved spec and write dev-to-qa handoff" };
   if (state.state === "qa_running") return { agent: "qa", command: `auok verify ${state.change}` };
   if (state.state === "qa_failed") return { agent: "dev", command: `auok agent handoff ${state.change} --from qa --to dev` };
+  if (state.state === "qa_verified") return { agent: "review", command: `review evidence and write review-to-archive handoff for ${state.change}` };
   if (state.state === "ready_for_archive") return { agent: "human", command: `auok archive ${state.change}` };
-  if (state.state === "waiting_human_approval") return { agent: "human", command: `auok archive ${state.change}` };
   return { agent: "orchestrator", command: `auok status ${state.change}` };
 }
 
 function completeArchive(change) {
   const state = loadState(change);
-  const canArchive = state.state === "ready_for_archive" || state.human_approval?.status === "approved";
-  if (!canArchive) {
+  if (state.state !== "ready_for_archive") {
     return { change, status: "blocked", reason: "archive requires ready_for_archive state" };
   }
   const source = changeDir(change);
@@ -173,7 +157,6 @@ function completeArchive(change) {
 
 module.exports = {
   addEvidence,
-  approve,
   archivedChangeDir,
   changeDir,
   completeArchive,
@@ -184,7 +167,6 @@ module.exports = {
   markAgent,
   markGate,
   saveState,
-  slugify,
   stateFile,
   summarizeStates
 };

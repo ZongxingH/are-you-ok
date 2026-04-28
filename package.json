@@ -10,7 +10,6 @@
     "auok": "node harness/cli/main.js",
     "bootstrap": "bash scripts/bootstrap.sh",
     "verify-env": "AUOK_HOME=. bash scripts/verify-env.sh",
-    "openspec-validate": "openspec validate --all --strict",
     "auok-smoke": "AUOK_HOME=. npm run auok -- run --capability smoke --adapter mock --out runs/smoke && AUOK_HOME=. npm run auok -- grade runs/smoke && AUOK_HOME=. npm run auok -- report runs/smoke && AUOK_HOME=. npm run auok -- gate runs/smoke --min-pass-rate 1.0 --no-critical-failures",
     "agent-status": "AUOK_HOME=. npm run auok -- agent status"
   },
