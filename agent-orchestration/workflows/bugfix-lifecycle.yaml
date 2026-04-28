@@ -1,0 +1,6 @@
+name: bugfix-lifecycle
+description: 先复现、再修复、再验证的缺陷修复流程
+extends: change-lifecycle
+required_evidence:
+  - failing_scenario_or_test
+  - fixed_gate_result

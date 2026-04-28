@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "auok result",
+  "type": "object",
+  "required": ["id", "capability", "adapter", "input", "output", "grader"],
+  "properties": {
+    "id": { "type": "string" },
+    "capability": { "type": "string" },
+    "severity": { "type": "string" },
+    "adapter": { "type": "string" },
+    "input": { "type": "object" },
+    "output": { "type": "object" },
+    "grader": { "type": "object" }
+  }
+}

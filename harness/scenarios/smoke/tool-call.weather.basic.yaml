@@ -1,0 +1,15 @@
+id: tool-call.weather.basic
+title: 查询天气时必须调用天气工具
+capability: smoke
+severity: critical
+tags: [tool-call, weather, smoke]
+input:
+  user: "帮我查一下今天北京天气"
+expected:
+  tool_calls:
+    - name: weather
+grader:
+  type: rule
+  rules:
+    - path: "$.tool_calls[*].name"
+      contains: weather

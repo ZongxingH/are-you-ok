@@ -1,0 +1,35 @@
+name: change-lifecycle
+description: 多 Agent 自主完成 OpenSpec change 到归档候选
+states:
+  created:
+    next: spec_planning
+  spec_planning:
+    agent: spec
+    next: spec_review
+  spec_review:
+    agent: review
+    command: auok validate {change}
+    on_pass: implementing
+    on_fail: spec_planning
+  implementing:
+    agent: dev
+    next: qa_running
+  qa_running:
+    agent: qa
+    commands:
+      - auok run --change {change} --out runs/{change}
+      - auok grade runs/{change}
+      - auok gate runs/{change} --min-pass-rate 1.0 --no-critical-failures
+    on_pass: review_running
+    on_fail: fixing
+  review_running:
+    agent: review
+    on_pass: ready_for_archive
+    on_fail: fixing
+  fixing:
+    agent: dev
+    next: qa_running
+  ready_for_archive:
+    agent: archive
+    requires_human_approval: true
+    next: waiting_human_approval

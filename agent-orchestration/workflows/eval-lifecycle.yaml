@@ -1,0 +1,7 @@
+name: eval-lifecycle
+description: 新增评测能力的流程
+extends: change-lifecycle
+required_evidence:
+  - scenario_schema_validation
+  - auok_run
+  - auok_gate

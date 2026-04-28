@@ -1,0 +1,11 @@
+node_modules/
+/auok/
+.env
+.env.*
+
+runs/*
+!runs/baseline/
+!runs/baseline/**
+
+*.log
+.DS_Store
