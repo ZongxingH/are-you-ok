@@ -1,6 +1,6 @@
 # Tasks: install-auok-slash-commands
 
-- [x] Add command installer to auok backend.
+- [x] Add command installer to deterministic Node code.
 - [x] Add Codex slash command template.
 - [x] Add Claude slash command template.
 - [x] Add dry-run support.

@@ -13,4 +13,4 @@ Agent coordination SHALL be represented in state and handoff files.
 #### Scenario: Change state exists
 
 - GIVEN `auok new <change-id>` runs
-- THEN `agent-orchestration/states/<change-id>.json` SHALL be created
+- THEN `auok/orchestration/states/<change-id>.json` SHALL be created in the target project workspace

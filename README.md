@@ -12,7 +12,7 @@ Superpowers = discipline layer: defines how agents work through reusable enginee
 Harness / auok = orchestration layer: defines who does the work and how it is coordinated through roles, scheduling, permissions, state, evidence, and archive.
 ```
 
-The backend is intentionally deterministic. Architecture analysis, spec refinement, implementation, QA diagnosis, review, and archive readiness are performed by the installed agent skills, not by hardcoded backend intelligence.
+The deterministic Node code only materializes files, state, validation, runs, reports, gates, and archive moves when the `/auok` workflow needs it. Architecture analysis, spec refinement, implementation, QA diagnosis, review, and archive readiness are performed by the active Codex or Claude agent workflow, not by hardcoded Node logic.
 
 ## Install
 
@@ -51,26 +51,27 @@ Use auok inside Codex or Claude:
 
 ```text
 /auok init
+/auok proposal "define a concrete requirement"
 /auok auto "implement a concrete requirement"
-/auok status <change-id>
 /auok archive <change-id>
 ```
 
-`/auok init` prepares the `auok/` workspace. If the project is empty, it only creates the base workspace and an empty architecture directory. If the project already has code, auok first creates deterministic architecture drafts, then the current model session analyzes project evidence and refines `auok/architecture/`. The generated architecture documents use the installed command language; Chinese is the default.
+`/auok init` prepares the `auok/` workspace inside the real project that is using the harness. If that project is empty, it only creates the base workspace and an empty architecture directory. If the project already has code, auok first creates deterministic architecture drafts, then the current model session analyzes project evidence and refines `auok/architecture/`. The generated architecture documents use the installed command language; Chinese is the default.
 
-The workflow has three phases:
+The workflow has four phases:
 
 ```text
-init    -> prepare auok workspace and architecture context
-auto    -> internally run proposal, Dev, QA, Review, and Archive agents
-archive -> final user confirmation after verification passes
+init     -> prepare auok workspace and architecture context
+proposal -> create or refine OpenSpec change, then stop before implementation
+auto     -> run proposal if needed, then Dev, QA, Review, and Archive agents
+archive  -> final user confirmation after ready_for_archive
 ```
 
-After `/auok init`, `/auok auto "需求"` is the main development flow: the current main Agent acts as Orchestrator, coordinates internal Spec, Dev, QA, Review, and Archive agents, completes requirement development, and stops at `ready_for_archive`. The user should only need to intervene for final `/auok archive <change-id>` confirmation or a true blocker.
+After `/auok init`, use `/auok proposal "需求"` when you want only the OpenSpec proposal/design/tasks/spec delta. Use `/auok auto "需求"` for the main autonomous development flow: the current main Agent acts as Orchestrator, coordinates internal Spec, Dev, QA, Review, and Archive agents, completes requirement development, and stops at `ready_for_archive`. The user should only need to intervene for final `/auok archive <change-id>` confirmation or a true blocker.
 
 ## Output
 
-auok writes project artifacts under `auok/`:
+When used in a real project, auok writes project artifacts under that project's `auok/` workspace:
 
 ```text
 auok/

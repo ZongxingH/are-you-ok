@@ -48,15 +48,18 @@ Lifecycle:
   auok init [--home auok] [--lang zh|en]
   auok install --target codex|claude|all [--lang zh|en] [--dry-run]
   auok new <change-id>
-  auok status [change-id] [--json]
-  auok validate [change-id|--all]
+  auok proposal <change-id> [--goal text]
+  auok validate <change-id>
   auok verify <change-id>
+  auok lifecycle transition <change-id> --to <state> [--reason text]
+  auok lifecycle ready-for-archive <change-id>
+  auok lifecycle block <change-id> --reason text
   auok archive <change-id>
 
 Agent State:
   auok agent status [change-id]
   auok agent resume <change-id>
-  auok agent handoff <change-id> --from qa --to dev
+  auok agent handoff <change-id> --from qa --to dev [--status ready]
 
 Harness:
   auok list scenarios [--capability name] [--json]
@@ -102,6 +105,25 @@ function validate(options = {}) {
     for (const name of ["proposal.md", "design.md", "tasks.md"]) {
       if (!fs.existsSync(path.join(dir, name))) errors.push(`Missing ${path.join(dir, name)}`);
     }
+    const file = stateFile(options.change);
+    if (!fs.existsSync(file)) errors.push(`Missing ${file}`);
+    else {
+      try {
+        const state = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (state.change !== options.change) errors.push(`State change mismatch: ${file}`);
+        if (!state.state) errors.push(`State missing state: ${file}`);
+        if (!state.agents || !state.gates) errors.push(`State missing agents or gates: ${file}`);
+      } catch (error) {
+        errors.push(`Invalid state JSON ${file}: ${error.message}`);
+      }
+    }
+    for (const handoff of listFiles(home.resolveInHome("orchestration", "handoffs", options.change), (candidate) => candidate.endsWith(".json"))) {
+      try {
+        lifecycle.validateHandoff(JSON.parse(fs.readFileSync(handoff, "utf8")));
+      } catch (error) {
+        errors.push(`Invalid handoff ${handoff}: ${error.message}`);
+      }
+    }
   }
   return { passed: errors.length === 0, errors };
 }
@@ -119,18 +141,41 @@ async function main() {
     return print(installCommands({ target: args.target || "all", lang: args.lang || "zh", dryRun: args.dryRun }), args.json);
   }
   if (command === "new") return print(createChange(requireChange(args)), args.json);
-  if (command === "status") {
-    const change = args._[1];
-    if (!change) return print(lifecycle.summarizeStates(), args.json);
-    const file = stateFile(change);
-    return print(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : { change, state: "missing" }, args.json);
+  if (command === "proposal") {
+    const change = requireChange(args);
+    return print(lifecycle.prepareProposal(change, { goal: args.goal || args._.slice(2).join(" ") }), args.json);
   }
   if (command === "validate") {
-    const change = args.all ? undefined : args._[1];
+    if (args.all) throw new Error("validate --all is not supported; use validate <change-id>");
+    const change = requireChange(args);
     const result = validate({ change });
     print(result, args.json);
     if (!result.passed) process.exitCode = 1;
     return;
+  }
+  if (command === "lifecycle") {
+    const sub = args._[1];
+    const change = args._[2];
+    if (!change) throw new Error("Missing <change-id>");
+    if (sub === "transition") {
+      if (!args.to) throw new Error("Missing --to <state>");
+      const result = lifecycle.transition(change, args.to, { reason: args.reason || "" });
+      print(result, args.json);
+      if (result.status === "blocked") process.exitCode = 1;
+      return;
+    }
+    if (sub === "ready-for-archive") {
+      const result = lifecycle.readyForArchive(change);
+      print(result, args.json);
+      if (result.status === "blocked") process.exitCode = 1;
+      return;
+    }
+    if (sub === "block") {
+      const result = lifecycle.block(change, args.reason || "");
+      print(result, args.json);
+      return;
+    }
+    throw new Error(`Unknown lifecycle command: ${sub}`);
   }
   if (command === "verify") {
     const change = requireChange(args);
@@ -165,7 +210,7 @@ async function main() {
       const change = args._[2];
       if (!change) throw new Error("Missing <change-id>");
       if (!args.from || !args.to) throw new Error("Missing --from or --to");
-      return print(lifecycle.createHandoff(change, args.from, args.to), args.json);
+      return print(lifecycle.writeHandoff(change, args.from, args.to, handoffArgs(args)), args.json);
     }
     throw new Error(`Unknown agent command: ${sub}`);
   }
@@ -188,7 +233,7 @@ async function main() {
     });
     return print(result, args.json);
   }
-  if (command === "grade") return print(gradeRun(home.resolveRunDir(args._[1])), args.json);
+  if (command === "grade") return print(await gradeRun(home.resolveRunDir(args._[1])), args.json);
   if (command === "report") return print({ report: report.render(home.resolveRunDir(args._[1])) }, args.json);
   if (command === "compare") return print(compareRuns(home.resolveRunDir(args._[1]), home.resolveRunDir(args._[2])), args.json);
   if (command === "gate") {
@@ -201,6 +246,27 @@ async function main() {
   throw new Error(`Unknown command: ${command}`);
 }
 
+function splitList(value) {
+  if (!value) return undefined;
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function handoffArgs(args) {
+  const data = {};
+  if (args.status) data.status = args.status;
+  if (args.summary) data.summary = args.summary;
+  if (args.evidence) data.evidence = splitList(args.evidence);
+  if (args.requiredAction) data.required_action = splitList(args.requiredAction);
+  if (args.commands) data.commands_to_reproduce = splitList(args.commands);
+  if (args.filesChanged) data.files_changed = splitList(args.filesChanged);
+  if (args.blockingFindings) data.blocking_findings = splitList(args.blockingFindings);
+  if (args.nextState) data.next_state = args.nextState;
+  return data;
+}
+
 async function verifyChange(change, args = {}) {
   const state = lifecycle.loadState(change);
   state.state = "qa_running";
@@ -210,7 +276,13 @@ async function verifyChange(change, args = {}) {
 
   if (!validation.passed) {
     state.state = "openspec_invalid";
+    state.retry_count = Number(state.retry_count || 0) + 1;
     lifecycle.markAgent(state, "qa", "failed", { reason: "validation failed" });
+    if (state.retry_count > Number(state.max_retries || 3)) {
+      state.state = "blocked";
+      state.blocked_reason = "retry limit exceeded after openspec_invalid";
+      lifecycle.addEvidence(state, { type: "blocked", reason: state.blocked_reason });
+    }
     lifecycle.saveState(state);
     return { change, passed: false, validate: validation, next: lifecycle.inferNext(state) };
   }
@@ -225,7 +297,7 @@ async function verifyChange(change, args = {}) {
   const resolvedOutDir = runResult.outDir;
   lifecycle.addEvidence(state, { type: "run", command: `auok run --capability ${args.capability || "smoke"} --adapter ${args.adapter || "mock"} --out ${outDir}`, result: runResult });
 
-  const gradeResult = gradeRun(resolvedOutDir);
+  const gradeResult = await gradeRun(resolvedOutDir);
   lifecycle.addEvidence(state, { type: "grade", command: `auok grade ${resolvedOutDir}`, result: { total: gradeResult.total, passed: gradeResult.passed, failed: gradeResult.failed } });
 
   const reportPath = report.render(resolvedOutDir);
@@ -243,13 +315,20 @@ async function verifyChange(change, args = {}) {
 
   if (!gateResult.passed) {
     state.state = "qa_failed";
+    state.retry_count = Number(state.retry_count || 0) + 1;
     lifecycle.markAgent(state, "qa", "failed", { run_dir: resolvedOutDir });
     lifecycle.createHandoff(change, "qa", "dev");
+    if (state.retry_count > Number(state.max_retries || 3)) {
+      state.state = "blocked";
+      state.blocked_reason = "retry limit exceeded after qa_failed";
+      lifecycle.addEvidence(state, { type: "blocked", reason: state.blocked_reason });
+    }
     lifecycle.saveState(state);
     return { change, passed: false, validate: validation, run: runResult, grade: gradeResult, report: reportPath, gate: gateResult, next: lifecycle.inferNext(state) };
   }
 
   state.state = "qa_verified";
+  state.retry_count = 0;
   lifecycle.markAgent(state, "qa", "done", { run_dir: resolvedOutDir });
   lifecycle.markAgent(state, "review", "pending");
   lifecycle.createHandoff(change, "qa", "review");
@@ -341,7 +420,7 @@ function writeArchitectureDocs(options = {}) {
 
 ## Notes
 
-The backend only creates deterministic placeholders. The active model session must inspect project evidence and complete this document.
+The internal Node capability only creates deterministic placeholders. The active model session must inspect project evidence and complete this document.
 `);
 
     writeArchitecture("tech-stack.md", `# Tech Stack
@@ -389,7 +468,7 @@ The backend only creates deterministic placeholders. The active model session mu
 
 ## 说明
 
-backend 只创建确定性占位文件。当前大模型会话必须通读项目证据并补全本文档。
+内部 Node 能力只创建确定性占位文件。当前大模型会话必须通读项目证据并补全本文档。
 `);
 
     writeArchitecture("tech-stack.md", `# 技术栈

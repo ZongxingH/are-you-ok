@@ -4,6 +4,8 @@ const { listFiles } = require("./fs");
 const { parseYaml } = require("./yaml");
 const home = require("./home");
 
+const ALLOWED_SEVERITY = new Set(["normal", "critical"]);
+
 function scenarioDir() {
   return home.resolveInHome("harness", "scenarios");
 }
@@ -18,6 +20,26 @@ function loadScenario(file) {
 function validateScenario(scenario) {
   for (const key of ["id", "title", "capability", "input", "grader"]) {
     if (scenario[key] === undefined) throw new Error(`Scenario missing required field: ${key}`);
+  }
+  for (const key of ["id", "title", "capability"]) {
+    if (typeof scenario[key] !== "string" || scenario[key].length === 0) {
+      throw new Error(`Scenario field must be a non-empty string: ${key}`);
+    }
+  }
+  if (scenario.severity !== undefined && !ALLOWED_SEVERITY.has(scenario.severity)) {
+    throw new Error(`Scenario ${scenario.id} has invalid severity: ${scenario.severity}`);
+  }
+  if (scenario.tags !== undefined && (!Array.isArray(scenario.tags) || scenario.tags.some((tag) => typeof tag !== "string"))) {
+    throw new Error(`Scenario ${scenario.id} tags must be an array of strings`);
+  }
+  if (!scenario.input || typeof scenario.input !== "object" || Array.isArray(scenario.input)) {
+    throw new Error(`Scenario ${scenario.id} input must be an object`);
+  }
+  if (scenario.expected !== undefined && (!scenario.expected || typeof scenario.expected !== "object" || Array.isArray(scenario.expected))) {
+    throw new Error(`Scenario ${scenario.id} expected must be an object`);
+  }
+  if (!scenario.grader || typeof scenario.grader !== "object" || Array.isArray(scenario.grader)) {
+    throw new Error(`Scenario ${scenario.id} grader must be an object`);
   }
   if (!scenario.grader.type) throw new Error(`Scenario ${scenario.id} missing grader.type`);
 }

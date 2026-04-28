@@ -13,5 +13,5 @@ Each scenario SHALL include `id`, `title`, `capability`, `input`, and `grader`.
 #### Scenario: Valid scenario
 
 - GIVEN a scenario file in `harness/scenarios`
-- WHEN `auok validate --all` runs
+- WHEN `auok validate <change-id>` runs
 - THEN the scenario SHALL be loaded without schema errors

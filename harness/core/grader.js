@@ -3,6 +3,7 @@ const path = require("path");
 const { writeJson, writeText } = require("./fs");
 const ruleGrader = require("../graders/rule");
 const snapshotGrader = require("../graders/snapshot");
+const judgeGrader = require("../graders/judge");
 
 function readResults(runDir) {
   const file = path.join(runDir, "results.jsonl");
@@ -10,13 +11,20 @@ function readResults(runDir) {
   return fs.readFileSync(file, "utf8").trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
 }
 
-function gradeRun(runDir) {
+async function gradeRun(runDir) {
   const results = readResults(runDir);
-  const graded = results.map((result) => {
-    if (result.grader.type === "rule") return ruleGrader.grade(result);
-    if (result.grader.type === "snapshot") return snapshotGrader.grade(result);
+  const graded = [];
+  for (const result of results) {
+    if (result.grader.type === "rule") {
+      graded.push(ruleGrader.grade(result));
+      continue;
+    }
+    if (result.grader.type === "judge") {
+      graded.push(await judgeGrader.grade(result));
+      continue;
+    }
     throw new Error(`Unsupported grader: ${result.grader.type}`);
-  });
+  }
   const passed = graded.filter((result) => result.passed).length;
   const failed = graded.length - passed;
   const criticalFailures = graded.filter((result) => !result.passed && result.severity === "critical").length;

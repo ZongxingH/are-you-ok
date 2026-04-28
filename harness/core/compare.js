@@ -1,5 +1,5 @@
 const path = require("path");
-const { readJson } = require("./fs");
+const { readJson, writeJson } = require("./fs");
 
 function compareRuns(baseDir, targetDir) {
   const base = readJson(path.join(baseDir, "summary.json"));
@@ -18,13 +18,15 @@ function compareRuns(baseDir, targetDir) {
     }
   }
 
-  return {
+  const comparison = {
     base: baseDir,
     target: targetDir,
     pass_rate_delta: target.pass_rate - base.pass_rate,
     critical_failures_delta: target.critical_failures - base.critical_failures,
     changes
   };
+  writeJson(path.join(targetDir, "comparison.json"), comparison);
+  return comparison;
 }
 
 module.exports = { compareRuns };
