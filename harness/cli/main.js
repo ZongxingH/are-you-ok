@@ -45,7 +45,7 @@ function help() {
   console.log(`auok [--home auok] <command> ...
 
 Lifecycle:
-  auok init [--home auok]
+  auok init [--home auok] [--lang zh|en]
   auok install --target codex|claude|all [--lang zh|en] [--dry-run]
   auok new <change-id>
   auok ff <change-id>
@@ -116,7 +116,7 @@ async function main() {
   const command = args._[0];
   if (!command || command === "--help" || command === "help") return help();
 
-  if (command === "init") return print(initHome({ force: args.force }), args.json);
+  if (command === "init") return print(initHome({ force: args.force, lang: args.lang || "zh" }), args.json);
   if (command === "install") {
     const sub = args._[1];
     if (sub) throw new Error(`Unknown install argument: ${sub}`);
@@ -460,7 +460,8 @@ function detectModules() {
   return entries.map((entry) => entry.name).filter((name) => !isIgnoredProjectEntry(name));
 }
 
-function writeArchitectureDocs() {
+function writeArchitectureDocs(options = {}) {
+  const lang = options.lang || "zh";
   ensureDir(home.resolveInHome("architecture"));
   if (isEmptyProject()) {
     return { mode: "empty", files: [] };
@@ -479,7 +480,8 @@ function writeArchitectureDocs() {
     generated.push(path.relative(process.cwd(), file));
   };
 
-  writeArchitecture("overview.md", `# Architecture Overview
+  if (lang === "en") {
+    writeArchitecture("overview.md", `# Architecture Overview
 
 ## Project Type
 
@@ -497,7 +499,7 @@ ${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- Unknown from f
 This document is generated from a read-only file scan during \`auok init\`. It should be refined by the Spec Agent when the first real change is proposed.
 `);
 
-  writeArchitecture("tech-stack.md", `# Tech Stack
+    writeArchitecture("tech-stack.md", `# Tech Stack
 
 ${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- No framework or language marker was confidently detected."}
 
@@ -506,7 +508,7 @@ ${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- No framework o
 ${files.filter((file) => /^(package\.json|pom\.xml|build\.gradle|build\.gradle\.kts|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|Dockerfile)$/.test(file)).map((file) => `- \`${file}\``).join("\n") || "- No common marker files found."}
 `);
 
-  writeArchitecture("modules.md", `# Modules
+    writeArchitecture("modules.md", `# Modules
 
 ## Top-Level Directories
 
@@ -517,12 +519,12 @@ ${modules.length ? modules.map((item) => `- \`${item}/\``).join("\n") : "- No to
 ${listProjectEntries().filter((entry) => entry.isFile).map((entry) => `- \`${entry.name}\``).join("\n") || "- No top-level files found."}
 `);
 
-  writeArchitecture("entrypoints.md", `# Entrypoints
+    writeArchitecture("entrypoints.md", `# Entrypoints
 
 ${entryPoints.length ? entryPoints.map((file) => `- \`${file}\``).join("\n") : "- No common entry point was detected."}
 `);
 
-  writeArchitecture("test-strategy.md", `# Test Strategy
+    writeArchitecture("test-strategy.md", `# Test Strategy
 
 ## Detected Tests
 
@@ -533,17 +535,81 @@ ${tests.length ? tests.slice(0, 80).map((file) => `- \`${file}\``).join("\n") : 
 QA Agent should validate the actual test command before relying on this generated summary.
 `);
 
-  writeArchitecture("risks.md", `# Architecture Risks
+    writeArchitecture("risks.md", `# Architecture Risks
 
 - This is an initial scan, not a full architecture review.
 - Dynamic runtime behavior, external services, and deployment topology may be missing.
 - Generated summaries must be treated as starting context for future Spec/Dev/QA/Review agents.
 `);
+  } else {
+    writeArchitecture("overview.md", `# 架构概览
+
+## 项目类型
+
+${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- 文件扫描未能明确识别项目类型"}
+
+## 证据
+
+- 扫描项目根目录：\`${process.cwd()}\`
+- 发现业务文件数：${files.length}
+- 发现入口线索数：${entryPoints.length}
+- 发现顶层模块数：${modules.length}
+
+## 说明
+
+本文档由 \`auok init\` 基于只读文件扫描生成。它是后续 Spec Agent 工作的初始上下文，不是最终架构结论。
+`);
+
+    writeArchitecture("tech-stack.md", `# 技术栈
+
+${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- 未从常见标记文件中可靠识别语言或框架。"}
+
+## 标记文件
+
+${files.filter((file) => /^(package\.json|pom\.xml|build\.gradle|build\.gradle\.kts|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|Dockerfile)$/.test(file)).map((file) => `- \`${file}\``).join("\n") || "- 未发现常见标记文件。"}
+`);
+
+    writeArchitecture("modules.md", `# 模块结构
+
+## 顶层目录
+
+${modules.length ? modules.map((item) => `- \`${item}/\``).join("\n") : "- 未发现顶层模块目录。"}
+
+## 顶层文件
+
+${listProjectEntries().filter((entry) => entry.isFile).map((entry) => `- \`${entry.name}\``).join("\n") || "- 未发现顶层文件。"}
+`);
+
+    writeArchitecture("entrypoints.md", `# 入口
+
+${entryPoints.length ? entryPoints.map((file) => `- \`${file}\``).join("\n") : "- 未发现常见入口文件。"}
+`);
+
+    writeArchitecture("test-strategy.md", `# 测试策略
+
+## 已发现测试
+
+${tests.length ? tests.slice(0, 80).map((file) => `- \`${file}\``).join("\n") : "- 未通过常见命名模式发现测试文件。"}
+
+## 说明
+
+QA Agent 在依赖本文档前，应先验证项目真实测试命令。
+`);
+
+    writeArchitecture("risks.md", `# 架构风险
+
+- 这是初始化扫描结果，不是完整架构评审。
+- 动态运行行为、外部服务和部署拓扑可能缺失。
+- 生成摘要只能作为后续 Spec/Dev/QA/Review Agent 的初始上下文。
+`);
+  }
 
   return { mode: "brownfield", files: generated };
 }
 
 function initHome(options = {}) {
+  const lang = options.lang || "zh";
+  if (!["zh", "en"].includes(lang)) throw new Error(`Unsupported language: ${lang}`);
   const root = home.getHome();
   ensureDir(root);
   const dirs = [
@@ -584,12 +650,13 @@ function initHome(options = {}) {
     const relative = path.relative(path.join(repoRoot, "harness", "scenarios"), file);
     copyFileIfMissing(file, home.resolveInHome("harness", "scenarios", relative));
   }
-  const architecture = writeArchitectureDocs();
+  const architecture = writeArchitectureDocs({ lang });
 
   return {
     home: root,
     relative: home.relativeHome(),
     created: true,
+    lang,
     project_mode: architecture.mode,
     architecture
   };

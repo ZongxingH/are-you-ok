@@ -16,6 +16,7 @@ auok init should give the harness enough project context for later Spec, Dev, QA
   - `entrypoints.md`
   - `test-strategy.md`
   - `risks.md`
+- Generate architecture document text in the selected language; default to Chinese.
 
 ## Out of Scope
 

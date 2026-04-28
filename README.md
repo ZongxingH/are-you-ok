@@ -55,7 +55,7 @@ Use auok inside Codex or Claude:
 /auok archive <change-id>
 ```
 
-`/auok init` prepares the `auok/` workspace. If the project is empty, it only creates the base workspace and an empty architecture directory. If the project already has code, auok scans the repository and writes an initial architecture summary.
+`/auok init` prepares the `auok/` workspace. If the project is empty, it only creates the base workspace and an empty architecture directory. If the project already has code, auok scans the repository and writes an initial architecture summary. The generated architecture documents use the installed command language; Chinese is the default.
 
 The workflow has three phases:
 

@@ -12,6 +12,7 @@
    - list top-level modules
    - identify common test file patterns
 4. Write generated summaries under `auok/architecture/`.
+5. Use `--lang zh|en` to choose generated document language. Default is `zh`.
 
 The generated architecture is starting context, not final authority. Future agents should refine it as they work.
 
