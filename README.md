@@ -25,8 +25,8 @@ npx github:ZongxingH/are-you-ok install --target all
 Choose one target:
 
 ```text
-codex  -> install .codex/commands/auok.md
-claude -> install .claude/commands/auok.md
+codex  -> install ~/.codex/skills/auok/SKILL.md
+claude -> install ~/.claude/commands/auok.md
 all    -> install both
 ```
 
@@ -48,6 +48,8 @@ Use auok inside Codex or Claude:
 /auok archive <change-id>
 ```
 
+`/auok init` prepares the `auok/` workspace. If the project is empty, it only creates the base workspace and an empty architecture directory. If the project already has code, auok scans the repository and writes an initial architecture summary.
+
 The workflow has three phases:
 
 ```text
@@ -64,6 +66,7 @@ auok writes project artifacts under `auok/`:
 
 ```text
 auok/
+  architecture/   # generated architecture context for existing projects
   openspec/       # specs, proposals, designs, tasks
   orchestration/  # agent states, workflows, handoffs
   harness/        # scenarios and schemas

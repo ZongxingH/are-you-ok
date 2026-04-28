@@ -1,8 +1,8 @@
-const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { ensureDir, writeText } = require("./fs");
 
-function commandTemplate(target) {
+function bodyTemplate(target) {
   const toolName = target === "claude" ? "Claude Code" : "Codex";
   const subagentName = target === "claude" ? "subagent / Task / custom agent" : "subagent / task / spawn_agent";
   return `# /auok
@@ -108,6 +108,41 @@ Report:
 `;
 }
 
+function codexSkillTemplate() {
+  return `---
+name: auok
+description: auok harness for OpenSpec + Superpowers driven multi-agent coding workflows. Use when the user invokes /auok or asks auok to run proposal, auto, status, or archive.
+---
+
+${bodyTemplate("codex")}`;
+}
+
+function claudeCommandTemplate() {
+  return `---
+name: 'auok'
+description: 'auok harness for OpenSpec + Superpowers driven multi-agent coding workflows. Use when the user invokes /auok or asks auok to run proposal, auto, status, or archive.'
+---
+
+${bodyTemplate("claude")}`;
+}
+
+function installTarget(item) {
+  const home = os.homedir();
+  if (item === "codex") {
+    return {
+      file: path.join(home, ".codex", "skills", "auok", "SKILL.md"),
+      content: codexSkillTemplate()
+    };
+  }
+  if (item === "claude") {
+    return {
+      file: path.join(home, ".claude", "commands", "auok.md"),
+      content: claudeCommandTemplate()
+    };
+  }
+  throw new Error(`Unsupported command target: ${item}`);
+}
+
 function installCommands(options = {}) {
   const target = options.target || "all";
   const dryRun = Boolean(options.dryRun);
@@ -115,13 +150,11 @@ function installCommands(options = {}) {
   const outputs = [];
 
   for (const item of supported) {
-    if (!["codex", "claude"].includes(item)) throw new Error(`Unsupported command target: ${item}`);
-    const dir = item === "codex" ? ".codex/commands" : ".claude/commands";
-    const file = path.join(process.cwd(), dir, "auok.md");
+    const { file, content } = installTarget(item);
     outputs.push(file);
     if (!dryRun) {
       ensureDir(path.dirname(file));
-      writeText(file, commandTemplate(item));
+      writeText(file, content);
     }
   }
 
@@ -132,4 +165,4 @@ function installCommands(options = {}) {
   };
 }
 
-module.exports = { commandTemplate, installCommands };
+module.exports = { codexSkillTemplate, claudeCommandTemplate, installCommands };

@@ -2,10 +2,10 @@
 
 ## Approach
 
-Install project-local command files:
+Install command/skill files where Codex and Claude actually discover them:
 
-- `.codex/commands/auok.md`
-- `.claude/commands/auok.md`
+- Codex: `~/.codex/skills/auok/SKILL.md`
+- Claude: `~/.claude/commands/auok.md`
 
 The command files describe how the active Codex or Claude session should interpret `/auok <args>`:
 

@@ -335,10 +335,219 @@ function copyFileIfMissing(source, target) {
   fs.copyFileSync(source, target);
 }
 
+const IGNORE_PROJECT_ENTRIES = new Set([
+  ".git",
+  ".hg",
+  ".svn",
+  ".DS_Store",
+  "auok",
+  ".auok",
+  "node_modules",
+  "vendor",
+  "dist",
+  "build",
+  "coverage",
+  "target",
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".cache",
+  ".idea",
+  ".vscode"
+]);
+
+function isIgnoredProjectEntry(name) {
+  if (IGNORE_PROJECT_ENTRIES.has(name)) return true;
+  if (name.startsWith(".") && ![".github", ".gitignore", ".env.example"].includes(name)) return true;
+  return false;
+}
+
+function listProjectEntries() {
+  return fs.readdirSync(process.cwd(), { withFileTypes: true })
+    .filter((entry) => !isIgnoredProjectEntry(entry.name))
+    .map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory(), isFile: entry.isFile() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function isEmptyProject() {
+  return listProjectEntries().length === 0;
+}
+
+function listProjectFiles(limit = 300) {
+  const ignoredDirs = new Set([...IGNORE_PROJECT_ENTRIES, "runs"]);
+  const out = [];
+  function visit(dir) {
+    if (out.length >= limit) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (out.length >= limit) return;
+      if (isIgnoredProjectEntry(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      const relative = path.relative(process.cwd(), full);
+      if (entry.isDirectory()) {
+        if (!ignoredDirs.has(entry.name)) visit(full);
+      } else if (entry.isFile()) {
+        out.push(relative);
+      }
+    }
+  }
+  visit(process.cwd());
+  return out.sort();
+}
+
+function readJsonIfExists(file) {
+  if (!fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function detectTechStack(files) {
+  const stack = [];
+  const has = (name) => files.includes(name) || fs.existsSync(path.join(process.cwd(), name));
+  const packageJson = readJsonIfExists(path.join(process.cwd(), "package.json"));
+  if (packageJson) {
+    stack.push("Node.js / npm package");
+    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+    for (const [pkg, label] of [
+      ["react", "React"],
+      ["next", "Next.js"],
+      ["vue", "Vue"],
+      ["vite", "Vite"],
+      ["typescript", "TypeScript"],
+      ["jest", "Jest"],
+      ["vitest", "Vitest"],
+      ["playwright", "Playwright"]
+    ]) {
+      if (deps[pkg]) stack.push(label);
+    }
+  }
+  if (has("pom.xml")) stack.push("Java / Maven");
+  if (has("build.gradle") || has("build.gradle.kts")) stack.push("Java/Kotlin / Gradle");
+  if (has("pyproject.toml") || has("requirements.txt")) stack.push("Python");
+  if (has("go.mod")) stack.push("Go");
+  if (has("Cargo.toml")) stack.push("Rust");
+  if (has("Dockerfile")) stack.push("Docker");
+  return [...new Set(stack)];
+}
+
+function detectEntryPoints(files) {
+  return files.filter((file) => [
+    "package.json",
+    "src/main.ts",
+    "src/main.js",
+    "src/index.ts",
+    "src/index.js",
+    "src/app.ts",
+    "src/app.js",
+    "main.py",
+    "app.py",
+    "cmd/main.go",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    "Cargo.toml"
+  ].includes(file) || /^cmd\/[^/]+\/main\.go$/.test(file));
+}
+
+function detectTests(files) {
+  return files.filter((file) => /(^|\/)(test|tests|__tests__)\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file));
+}
+
+function detectModules() {
+  const entries = listProjectEntries().filter((entry) => entry.isDirectory);
+  return entries.map((entry) => entry.name).filter((name) => !isIgnoredProjectEntry(name));
+}
+
+function writeArchitectureDocs() {
+  ensureDir(home.resolveInHome("architecture"));
+  if (isEmptyProject()) {
+    return { mode: "empty", files: [] };
+  }
+
+  const files = listProjectFiles();
+  const stack = detectTechStack(files);
+  const entryPoints = detectEntryPoints(files);
+  const tests = detectTests(files);
+  const modules = detectModules();
+  const generated = [];
+
+  const writeArchitecture = (name, content) => {
+    const file = home.resolveInHome("architecture", name);
+    writeText(file, content);
+    generated.push(path.relative(process.cwd(), file));
+  };
+
+  writeArchitecture("overview.md", `# Architecture Overview
+
+## Project Type
+
+${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- Unknown from file scan"}
+
+## Evidence
+
+- Scanned project root: \`${process.cwd()}\`
+- Business files found: ${files.length}
+- Entry points found: ${entryPoints.length}
+- Top-level modules found: ${modules.length}
+
+## Notes
+
+This document is generated from a read-only file scan during \`auok init\`. It should be refined by the Spec Agent when the first real change is proposed.
+`);
+
+  writeArchitecture("tech-stack.md", `# Tech Stack
+
+${stack.length ? stack.map((item) => `- ${item}`).join("\n") : "- No framework or language marker was confidently detected."}
+
+## Marker Files
+
+${files.filter((file) => /^(package\.json|pom\.xml|build\.gradle|build\.gradle\.kts|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|Dockerfile)$/.test(file)).map((file) => `- \`${file}\``).join("\n") || "- No common marker files found."}
+`);
+
+  writeArchitecture("modules.md", `# Modules
+
+## Top-Level Directories
+
+${modules.length ? modules.map((item) => `- \`${item}/\``).join("\n") : "- No top-level module directories found."}
+
+## Top-Level Files
+
+${listProjectEntries().filter((entry) => entry.isFile).map((entry) => `- \`${entry.name}\``).join("\n") || "- No top-level files found."}
+`);
+
+  writeArchitecture("entrypoints.md", `# Entrypoints
+
+${entryPoints.length ? entryPoints.map((file) => `- \`${file}\``).join("\n") : "- No common entry point was detected."}
+`);
+
+  writeArchitecture("test-strategy.md", `# Test Strategy
+
+## Detected Tests
+
+${tests.length ? tests.slice(0, 80).map((file) => `- \`${file}\``).join("\n") : "- No test files were detected from common naming patterns."}
+
+## Notes
+
+QA Agent should validate the actual test command before relying on this generated summary.
+`);
+
+  writeArchitecture("risks.md", `# Architecture Risks
+
+- This is an initial scan, not a full architecture review.
+- Dynamic runtime behavior, external services, and deployment topology may be missing.
+- Generated summaries must be treated as starting context for future Spec/Dev/QA/Review agents.
+`);
+
+  return { mode: "brownfield", files: generated };
+}
+
 function initHome(options = {}) {
   const root = home.getHome();
   ensureDir(root);
   const dirs = [
+    "architecture",
     "openspec/specs",
     "openspec/changes/archive",
     "orchestration/workflows",
@@ -375,11 +584,14 @@ function initHome(options = {}) {
     const relative = path.relative(path.join(repoRoot, "harness", "scenarios"), file);
     copyFileIfMissing(file, home.resolveInHome("harness", "scenarios", relative));
   }
+  const architecture = writeArchitectureDocs();
 
   return {
     home: root,
     relative: home.relativeHome(),
-    created: true
+    created: true,
+    project_mode: architecture.mode,
+    architecture
   };
 }
 
