@@ -46,7 +46,7 @@ function help() {
 
 Lifecycle:
   auok init [--home auok]
-  auok install --target codex|claude|all [--dry-run]
+  auok install --target codex|claude|all [--lang zh|en] [--dry-run]
   auok new <change-id>
   auok ff <change-id>
   auok status [change-id] [--json]
@@ -120,7 +120,7 @@ async function main() {
   if (command === "install") {
     const sub = args._[1];
     if (sub) throw new Error(`Unknown install argument: ${sub}`);
-    return print(installCommands({ target: args.target || "all", dryRun: args.dryRun }), args.json);
+    return print(installCommands({ target: args.target || "all", lang: args.lang || "zh", dryRun: args.dryRun }), args.json);
   }
   if (command === "new") return print(createChange(requireChange(args)), args.json);
   if (command === "ff") {

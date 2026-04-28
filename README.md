@@ -17,9 +17,9 @@ auok coordinates agents, verification, state, and archive
 Install `/auok` into your project:
 
 ```bash
-npx github:ZongxingH/are-you-ok install --target codex
-npx github:ZongxingH/are-you-ok install --target claude
-npx github:ZongxingH/are-you-ok install --target all
+npx github:ZongxingH/are-you-ok install --target codex --lang zh
+npx github:ZongxingH/are-you-ok install --target claude --lang zh
+npx github:ZongxingH/are-you-ok install --target all --lang zh
 ```
 
 Choose one target:
@@ -30,10 +30,17 @@ claude -> install ~/.claude/commands/auok.md
 all    -> install both
 ```
 
+Choose command language:
+
+```text
+zh -> Chinese interaction instructions, default
+en -> English interaction instructions
+```
+
 After auok is published to npm, this shorter form can also be used:
 
 ```bash
-npx auok install --target all
+npx auok install --target all --lang zh
 ```
 
 ## Use
