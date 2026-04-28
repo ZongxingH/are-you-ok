@@ -7,6 +7,7 @@ const { gradeRun } = require("../core/grader");
 const report = require("../reports/markdown");
 const { gate } = require("../core/gate");
 const { compareRuns } = require("../core/compare");
+const { installCommands } = require("../core/commands");
 const { ensureDir, writeJson, writeText, listFiles } = require("../core/fs");
 const lifecycle = require("../core/lifecycle");
 const home = require("../core/home");
@@ -45,6 +46,7 @@ function help() {
 
 Lifecycle:
   auok init [--home auok]
+  auok install --target codex|claude|all [--dry-run]
   auok new <change-id>
   auok ff <change-id>
   auok status [change-id] [--json]
@@ -59,7 +61,6 @@ Automation:
   auok agent status [change-id]
   auok agent resume <change-id>
   auok agent handoff <change-id> --from qa --to dev
-  auok agent approve <change-id> --action archive
 
 Harness:
   auok list scenarios [--capability name] [--json]
@@ -116,6 +117,11 @@ async function main() {
   if (!command || command === "--help" || command === "help") return help();
 
   if (command === "init") return print(initHome({ force: args.force }), args.json);
+  if (command === "install") {
+    const sub = args._[1];
+    if (sub) throw new Error(`Unknown install argument: ${sub}`);
+    return print(installCommands({ target: args.target || "all", dryRun: args.dryRun }), args.json);
+  }
   if (command === "new") return print(createChange(requireChange(args)), args.json);
   if (command === "ff") {
     const change = requireChange(args);
@@ -268,27 +274,28 @@ async function verifyChange(change, args = {}) {
     adapter: args.adapter || "mock",
     out: outDir
   });
+  const resolvedOutDir = runResult.outDir;
   lifecycle.addEvidence(state, { type: "run", command: `auok run --capability ${args.capability || "smoke"} --adapter ${args.adapter || "mock"} --out ${outDir}`, result: runResult });
 
-  const gradeResult = gradeRun(outDir);
-  lifecycle.addEvidence(state, { type: "grade", command: `auok grade ${outDir}`, result: { total: gradeResult.total, passed: gradeResult.passed, failed: gradeResult.failed } });
+  const gradeResult = gradeRun(resolvedOutDir);
+  lifecycle.addEvidence(state, { type: "grade", command: `auok grade ${resolvedOutDir}`, result: { total: gradeResult.total, passed: gradeResult.passed, failed: gradeResult.failed } });
 
-  const reportPath = report.render(outDir);
-  lifecycle.addEvidence(state, { type: "report", command: `auok report ${outDir}`, path: reportPath });
+  const reportPath = report.render(resolvedOutDir);
+  lifecycle.addEvidence(state, { type: "report", command: `auok report ${resolvedOutDir}`, path: reportPath });
 
-  const gateResult = gate(outDir, {
+  const gateResult = gate(resolvedOutDir, {
     minPassRate: args.minPassRate || "1.0",
     noCriticalFailures: args.noCriticalFailures === undefined ? true : args.noCriticalFailures
   });
   lifecycle.markGate(state, "auok_gate", gateResult.passed ? "pass" : "fail", {
-    run_dir: outDir,
+    run_dir: resolvedOutDir,
     failures: gateResult.failures
   });
-  lifecycle.addEvidence(state, { type: "gate", command: `auok gate ${outDir} --min-pass-rate ${args.minPassRate || "1.0"} --no-critical-failures`, result: { passed: gateResult.passed, failures: gateResult.failures } });
+  lifecycle.addEvidence(state, { type: "gate", command: `auok gate ${resolvedOutDir} --min-pass-rate ${args.minPassRate || "1.0"} --no-critical-failures`, result: { passed: gateResult.passed, failures: gateResult.failures } });
 
   if (!gateResult.passed) {
     state.state = "qa_failed";
-    lifecycle.markAgent(state, "qa", "failed", { run_dir: outDir });
+    lifecycle.markAgent(state, "qa", "failed", { run_dir: resolvedOutDir });
     lifecycle.markAgent(state, "review", "pending");
     lifecycle.createHandoff(change, "qa", "dev");
     lifecycle.saveState(state);
@@ -296,7 +303,7 @@ async function verifyChange(change, args = {}) {
   }
 
   state.state = "ready_for_archive";
-  lifecycle.markAgent(state, "qa", "done", { run_dir: outDir });
+  lifecycle.markAgent(state, "qa", "done", { run_dir: resolvedOutDir });
   lifecycle.markAgent(state, "review", "done", { findings: [] });
   lifecycle.markAgent(state, "archive", "ready", { requires_human_approval: true });
   lifecycle.markGate(state, "review", "pass");
@@ -379,7 +386,7 @@ function initHome(options = {}) {
 function inferNext(state) {
   if (state.state === "created") return { agent: "spec", command: `auok ff ${state.change}` };
   if (state.state === "qa_failed") return { agent: "dev", command: `auok agent handoff ${state.change} --from qa --to dev` };
-  if (state.state === "ready_for_archive") return { agent: "archive", command: `auok agent approve ${state.change} --action archive` };
+  if (state.state === "ready_for_archive") return { agent: "human", command: `auok archive ${state.change}` };
   return { agent: "orchestrator", command: `auok status ${state.change}` };
 }
 

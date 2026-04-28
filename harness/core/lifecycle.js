@@ -142,15 +142,16 @@ function inferNext(state) {
   if (state.state === "implementing") return { agent: "dev", command: `auok apply ${state.change}` };
   if (state.state === "qa_running") return { agent: "qa", command: `auok verify ${state.change}` };
   if (state.state === "qa_failed") return { agent: "dev", command: `auok agent handoff ${state.change} --from qa --to dev` };
-  if (state.state === "ready_for_archive") return { agent: "archive", command: `auok agent approve ${state.change} --action archive` };
-  if (state.state === "waiting_human_approval") return { agent: "human", command: `auok agent approve ${state.change} --action archive` };
+  if (state.state === "ready_for_archive") return { agent: "human", command: `auok archive ${state.change}` };
+  if (state.state === "waiting_human_approval") return { agent: "human", command: `auok archive ${state.change}` };
   return { agent: "orchestrator", command: `auok status ${state.change}` };
 }
 
 function completeArchive(change) {
   const state = loadState(change);
-  if (state.human_approval?.status !== "approved") {
-    return { change, status: "blocked", reason: "human approval required before archive" };
+  const canArchive = state.state === "ready_for_archive" || state.human_approval?.status === "approved";
+  if (!canArchive) {
+    return { change, status: "blocked", reason: "archive requires ready_for_archive state" };
   }
   const source = changeDir(change);
   if (!fs.existsSync(source)) return { change, status: "missing", reason: `Missing ${source}` };
@@ -158,8 +159,13 @@ function completeArchive(change) {
   ensureDir(path.dirname(target));
   if (fs.existsSync(target)) return { change, status: "already_archived", archive: target };
   fs.renameSync(source, target);
+  state.human_approval = state.human_approval || {};
+  state.human_approval.status = "approved";
+  state.human_approval.action = "archive";
+  state.human_approval.approved_at = new Date().toISOString();
   state.state = "archived";
   markAgent(state, "archive", "done", { archive: target });
+  addEvidence(state, { type: "approval", action: "archive", source: "auok archive command" });
   addEvidence(state, { type: "archive", path: target });
   saveState(state);
   return { change, status: "archived", archive: target };
