@@ -106,10 +106,11 @@ function validate(options = {}) {
       if (!fs.existsSync(path.join(dir, name))) errors.push(`Missing ${path.join(dir, name)}`);
     }
     const file = stateFile(options.change);
+    let state = null;
     if (!fs.existsSync(file)) errors.push(`Missing ${file}`);
     else {
       try {
-        const state = JSON.parse(fs.readFileSync(file, "utf8"));
+        state = JSON.parse(fs.readFileSync(file, "utf8"));
         if (state.change !== options.change) errors.push(`State change mismatch: ${file}`);
         if (!state.state) errors.push(`State missing state: ${file}`);
         if (!state.agents || !state.gates) errors.push(`State missing agents or gates: ${file}`);
@@ -124,8 +125,35 @@ function validate(options = {}) {
         errors.push(`Invalid handoff ${handoff}: ${error.message}`);
       }
     }
+    if (state) validateGateEvidence(state, errors);
   }
   return { passed: errors.length === 0, errors };
+}
+
+function validateGateEvidence(state, errors) {
+  const auokGate = state.gates && state.gates.auok_gate;
+  if (!auokGate || !auokGate.run_dir) return;
+  const runDir = auokGate.run_dir;
+  for (const name of ["run.yaml", "results.jsonl", "summary.json", "report.md"]) {
+    if (!fs.existsSync(path.join(runDir, name))) errors.push(`Missing gate evidence ${path.join(runDir, name)}`);
+  }
+  const summaryFile = path.join(runDir, "summary.json");
+  if (fs.existsSync(summaryFile)) {
+    try {
+      const summary = JSON.parse(fs.readFileSync(summaryFile, "utf8"));
+      if (typeof summary.pass_rate !== "number") errors.push(`Gate summary missing pass_rate: ${summaryFile}`);
+      if (typeof summary.critical_failures !== "number") errors.push(`Gate summary missing critical_failures: ${summaryFile}`);
+      if (!Array.isArray(summary.results)) errors.push(`Gate summary missing results: ${summaryFile}`);
+      if (auokGate.status === "pass" && Array.isArray(auokGate.failures) && auokGate.failures.length > 0) {
+        errors.push(`auok_gate is pass but has failures in state: ${state.change}`);
+      }
+      if (auokGate.status === "pass" && summary.critical_failures > 0) {
+        errors.push(`auok_gate is pass but summary has critical failures: ${summaryFile}`);
+      }
+    } catch (error) {
+      errors.push(`Invalid gate summary ${summaryFile}: ${error.message}`);
+    }
+  }
 }
 
 async function main() {

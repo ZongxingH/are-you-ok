@@ -52,7 +52,7 @@ Use auok inside Codex or Claude:
 ```text
 /auok init
 /auok proposal "define a concrete requirement"
-/auok auto "implement a concrete requirement"
+/auok implement <change-id>
 /auok archive <change-id>
 ```
 
@@ -63,11 +63,11 @@ The workflow has four phases:
 ```text
 init     -> prepare auok workspace and architecture context
 proposal -> create or refine OpenSpec change, then stop before implementation
-auto     -> run proposal if needed, then Dev, QA, Review, and Archive agents
+implement -> run Dev, QA, Review, and Archive agents from an existing proposal
 archive  -> final user confirmation after ready_for_archive
 ```
 
-After `/auok init`, use `/auok proposal "需求"` when you want only the OpenSpec proposal/design/tasks/spec delta. Use `/auok auto "需求"` for the main autonomous development flow: the current main Agent acts as Orchestrator, coordinates internal Spec, Dev, QA, Review, and Archive agents, completes requirement development, and stops at `ready_for_archive`. The user should only need to intervene for final `/auok archive <change-id>` confirmation or a true blocker.
+After `/auok init`, use `/auok proposal "需求"` to create the OpenSpec proposal/design/tasks/spec delta. Use `/auok implement <change-id>` only after a proposal exists: the current main Agent acts as Orchestrator, coordinates internal Dev, QA, Review, and Archive agents, completes requirement development, and stops at `ready_for_archive`. The user should only need to intervene for final `/auok archive <change-id>` confirmation or a true blocker.
 
 ## Output
 
@@ -84,4 +84,27 @@ auok/
 
 For existing projects, the internal Architect Agent performs model-driven architecture analysis. It should include module-level technology evidence such as Redis, MongoDB, MySQL, Nacos, Kafka, RabbitMQ, and other common middleware when supported by dependencies, config, or source markers.
 
-When `/auok auto` finishes successfully, it stops at `ready_for_archive`. Run `/auok archive <change-id>` to confirm archive.
+When `/auok implement` finishes successfully, it stops at `ready_for_archive`. Run `/auok archive <change-id>` to confirm archive.
+
+## Internal Node Capability
+
+The terminal CLI is an internal deterministic capability for `/auok` and for harness development/debugging. It is not the daily user workflow.
+
+```bash
+npm run auok -- init
+npm run auok -- proposal <change-id> --goal "需求"
+npm run auok -- validate <change-id>
+npm run auok -- verify <change-id>
+npm run auok -- lifecycle ready-for-archive <change-id>
+npm run auok -- archive <change-id>
+```
+
+Other internal commands include `new`, `agent status`, `agent resume`, `agent handoff`, `list scenarios`, `run`, `grade`, `report`, `compare`, `gate`, and lifecycle `transition/block`.
+
+## Harness Features
+
+- Adapters: `mock`, `http`, and `cli`.
+- Graders: `rule`, `snapshot`, and `judge`.
+- Reports include pass/fail, score, reason, critical failures, and compare trend when available.
+- `validate <change-id>` checks OpenSpec files, scenarios, state, handoffs, and existing gate evidence.
+- `gate` supports pass-rate thresholds and critical-failure blocking.

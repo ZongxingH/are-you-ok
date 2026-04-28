@@ -18,10 +18,10 @@ The command files describe how the active Codex or Claude session should interpr
 1. Treat `/auok` as the user-facing entry.
 2. Use Chinese instructions by default; allow English via `--lang en`.
 3. Make `/auok init` model-driven: inspect the repo first, then call deterministic init for materialization.
-4. Expose only `/auok init`, `/auok proposal`, `/auok auto`, and `/auok archive` as user-facing commands.
+4. Expose only `/auok init`, `/auok proposal`, `/auok implement`, and `/auok archive` as user-facing commands.
 5. Keep Spec, Dev, QA, Review, and Archive role work internal to Orchestrator-controlled agent instructions.
 6. Use deterministic Node code only as an implementation detail for state, OpenSpec files, runs, reports, and gates.
-7. For implementation requests, create/read the auok change.
+7. For implementation requests, require an existing auok change created by `/auok proposal`.
 8. Act as Orchestrator and coordinate independent Architect/Spec/Dev/QA/Review/Archive agents through internal role instructions.
 9. Run validate/verify/run/grade/report/gate.
 10. Write evidence to auok state and handoff files.

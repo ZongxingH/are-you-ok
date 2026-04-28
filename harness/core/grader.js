@@ -19,6 +19,10 @@ async function gradeRun(runDir) {
       graded.push(ruleGrader.grade(result));
       continue;
     }
+    if (result.grader.type === "snapshot") {
+      graded.push(snapshotGrader.grade(result));
+      continue;
+    }
     if (result.grader.type === "judge") {
       graded.push(await judgeGrader.grade(result));
       continue;

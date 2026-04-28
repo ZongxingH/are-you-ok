@@ -12,7 +12,7 @@ auok is intended to be used by large-model coding agents inside Codex and Claude
 - Remove stale role skills/commands from older installs so only `/auok` is exposed.
 - Use `npx github:ZongxingH/are-you-ok install ...` only for installing slash commands from GitHub; daily project work runs through `/auok`.
 - Instruct the current session Agent to act as Orchestrator and coordinate independent Spec/Dev/QA/Review/Archive agents internally.
-- Expose only `/auok init`, `/auok proposal`, `/auok auto`, and `/auok archive`; keep spec/dev/qa/review/archive role work internal to auok orchestration.
+- Expose only `/auok init`, `/auok proposal`, `/auok implement`, and `/auok archive`; keep spec/dev/qa/review/archive role work internal to auok orchestration.
 
 ## Out of Scope
 

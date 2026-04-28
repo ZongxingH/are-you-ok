@@ -38,10 +38,10 @@ Only these `/auok` forms are user-facing:
 
 - \`/auok init\`
 - \`/auok proposal "define a concrete requirement"\`
-- \`/auok auto "implement a concrete requirement"\`
+- \`/auok implement <change-id>\`
 - \`/auok archive <change-id>\`
 
-\`/auok proposal\` creates or refines the OpenSpec change and stops before implementation. \`/auok auto\` may continue from an existing proposal or run the proposal phase internally before Dev/QA/Review/Archive agents continue.
+\`/auok proposal\` creates or refines the OpenSpec change and stops before implementation. \`/auok implement\` requires an existing proposal and must not create, rewrite, or accept new proposal content.
 
 ## Internal Node Execution
 
@@ -114,44 +114,42 @@ act as the Orchestrator and run only the proposal phase:
 For implementation requests such as:
 
 \`\`\`text
-/auok auto "implement a concrete requirement"
+/auok implement <change-id>
 \`\`\`
 
 act as the Orchestrator Agent for this current session.
 
-The Orchestrator must coordinate independent subagents. Do not implement the full workflow by having one agent pretend to be all roles. After project initialization, \`/auok auto\` is the main autonomous development flow: the user gives the requirement, the Orchestrator coordinates Spec, Dev, QA, Review, and Archive agents to finish the work, and the user only intervenes for final archive confirmation or a true blocker.
+The Orchestrator must coordinate independent subagents. Do not implement the full workflow by having one agent pretend to be all roles. After \`/auok proposal\` has produced an OpenSpec change, \`/auok implement\` is the autonomous implementation flow: the Orchestrator coordinates Dev, QA, Review, and Archive agents to finish the work, and the user only intervenes for final archive confirmation or a true blocker.
 
-1. Create or reuse a change using \`${BACKEND_COMMAND} new <change-id>\`.
-2. Run the Proposal phase through Spec Agent. The Node capability creates default OpenSpec files only; Spec Agent must refine proposal/design/tasks/spec deltas with model reasoning and project evidence.
+1. Require an existing change under \`auok/openspec/changes/<change-id>\`. If it is missing, stop and tell the user to run \`/auok proposal "..."\`.
+2. Validate that proposal/design/tasks/spec delta exist. Do not create or rewrite proposal content in this flow.
 3. Read:
    - \`auok/openspec/changes/<change-id>/proposal.md\`
    - \`auok/openspec/changes/<change-id>/design.md\`
    - \`auok/openspec/changes/<change-id>/tasks.md\`
    - relevant files under \`auok/openspec/specs/\`
 4. Use the environment's ${subagentName} capability to start independent subagents:
-   - Spec Agent
    - Dev Agent
    - QA Agent
    - Review Agent
    - Archive Agent
 5. Do not ask the user which Agent to run next. The Orchestrator decides based on state, handoff, and gate results.
-6. Spec Agent must update proposal/design/tasks/spec delta and write \`auok/orchestration/handoffs/<change-id>/spec-to-dev.json\`.
-7. Dev Agent must read Spec handoff, autonomously edit project code and auok scenarios, then write \`dev-to-qa.json\`.
-8. QA Agent must run verification:
+6. Dev Agent must read Spec handoff, autonomously edit project code and auok scenarios, then write \`dev-to-qa.json\`.
+7. QA Agent must run verification:
    - validate all auok artifacts
    - verify the change and collect JSON evidence
    - if needed: run, grade, report, and gate the relevant scenarios
    On failure, write \`qa-to-dev.json\`.
    On success, Node state will move to \`qa_verified\`; write \`qa-to-review.json\`.
-9. Review Agent must review diff, specs, scenarios, and evidence.
+8. Review Agent must review diff, specs, scenarios, and evidence.
    On failure, write \`review-to-dev.json\`.
    On success, write \`review-to-archive.json\`.
-10. If QA or Review fails, the Orchestrator must autonomously rerun Dev/QA/Review until success or blocked retry limit.
-11. Archive Agent must summarize evidence, verify Review success, and set state to \`ready_for_archive\` only when the archive candidate is valid.
+9. If QA or Review fails, the Orchestrator must autonomously rerun Dev/QA/Review until success or blocked retry limit.
+10. Archive Agent must summarize evidence, verify Review success, and set state to \`ready_for_archive\` only when the archive candidate is valid.
     Use \`${BACKEND_COMMAND} lifecycle ready-for-archive <change-id> --json\` for the deterministic lifecycle check.
-12. Stop at \`ready_for_archive\` and tell the user to run \`/auok archive <change-id>\` when they confirm.
+11. Stop at \`ready_for_archive\` and tell the user to run \`/auok archive <change-id>\` when they confirm.
 
-If the current ${toolName} environment does not support independent subagents, mark the change blocked and report that \`/auok auto\` requires subagent support. Do not silently downgrade to a single-agent workflow unless the user explicitly allows it.
+If the current ${toolName} environment does not support independent subagents, mark the change blocked and report that \`/auok implement\` requires subagent support. Do not silently downgrade to a single-agent workflow unless the user explicitly allows it.
 
 ## Hard Rules
 
@@ -163,7 +161,7 @@ If the current ${toolName} environment does not support independent subagents, m
 - The user-facing interface is \`/auok\`. Node commands are implementation details for the current Agent session.
 - The user must not be asked to coordinate subagents. Only ask the user for final approval or true blockers.
 - Do not ask the user to manually invoke Spec, Dev, QA, Review, or Archive roles.
-- \`/auok auto\` requires independent subagents by default.
+- \`/auok implement\` requires independent subagents by default.
 
 ## Completion Response
 
@@ -213,10 +211,10 @@ auok 由三层组成：
 
 - \`/auok init\`
 - \`/auok proposal "定义一个具体需求"\`
-- \`/auok auto "实现一个具体需求"\`
+- \`/auok implement <change-id>\`
 - \`/auok archive <change-id>\`
 
-\`/auok proposal\` 只创建或完善 OpenSpec change，并在实现前停止。\`/auok auto\` 可以接续已有 proposal，也可以内部先完成 proposal 阶段，再继续 Dev/QA/Review/Archive。
+\`/auok proposal\` 只创建或完善 OpenSpec change，并在实现前停止。\`/auok implement\` 只接续已有 proposal，不创建、不重写、不接收新的提案内容。
 
 ## 内部 Node 执行
 
@@ -289,15 +287,15 @@ Node 命令只用于状态落盘、确定性校验、场景运行、报告、gat
 对于实现类请求，例如：
 
 \`\`\`text
-/auok auto "实现一个具体需求"
+/auok implement <change-id>
 \`\`\`
 
 当前会话是 Orchestrator Agent。
 
-Orchestrator 必须协调独立子 Agent。不要由一个 Agent 假装自己完成所有角色。项目初始化后，\`/auok auto\` 就是主要自主开发流程：用户给出需求，Orchestrator 编排 Spec、Dev、QA、Review、Archive Agent 完成需求开发，用户只在最终归档确认或真实阻塞时介入。
+Orchestrator 必须协调独立子 Agent。不要由一个 Agent 假装自己完成所有角色。\`/auok proposal\` 产出 OpenSpec change 后，\`/auok implement\` 才是自主实现流程：Orchestrator 编排 Dev、QA、Review、Archive Agent 完成需求开发，用户只在最终归档确认或真实阻塞时介入。
 
-1. 使用 \`${BACKEND_COMMAND} new <change-id>\` 创建或复用 change。
-2. 通过 Spec Agent 完成提案阶段。Node 能力只创建默认 OpenSpec 文件；Spec Agent 必须基于模型推理和项目证据精修 proposal/design/tasks/spec delta。
+1. 要求 \`auok/openspec/changes/<change-id>\` 已存在；如果不存在，停止并提示用户先执行 \`/auok proposal "..."\`。
+2. 校验 proposal/design/tasks/spec delta 已存在。本流程不创建、不重写 proposal 内容。
 3. 读取：
    - \`auok/openspec/changes/<change-id>/proposal.md\`
    - \`auok/openspec/changes/<change-id>/design.md\`
@@ -305,21 +303,19 @@ Orchestrator 必须协调独立子 Agent。不要由一个 Agent 假装自己完
    - \`auok/architecture/\`
    - \`auok/openspec/specs/\` 下相关文件
 4. 使用当前环境的 ${subagentName} 能力启动独立子 Agent：
-   - Spec Agent
    - Dev Agent
    - QA Agent
    - Review Agent
    - Archive Agent
 5. 不要询问用户下一步该运行哪个 Agent。Orchestrator 根据 state、handoff 和 gate 结果自主决定。
-6. Spec Agent 更新 proposal/design/tasks/spec delta，并写 \`auok/orchestration/handoffs/<change-id>/spec-to-dev.json\`。
-7. Dev Agent 读取 Spec handoff，自主修改项目代码和 auok scenarios，然后写 \`dev-to-qa.json\`。
-8. QA Agent 执行验证：validate、verify、run、grade、report、gate。失败写 \`qa-to-dev.json\`；成功时 Node 状态进入 \`qa_verified\`，并写 \`qa-to-review.json\`。
-9. Review Agent 审查 diff、规范、场景和证据。失败写 \`review-to-dev.json\`，成功写 \`review-to-archive.json\`。
-10. QA 或 Review 失败时，Orchestrator 自主协调 Dev/QA/Review 返工，直到成功或达到阻塞条件。
-11. Archive Agent 汇总证据、确认 Review 通过，并且只有在归档候选有效时才把状态置为 \`ready_for_archive\`。使用 \`${BACKEND_COMMAND} lifecycle ready-for-archive <change-id> --json\` 做确定性生命周期检查。
-12. 到 \`ready_for_archive\` 后停止，告诉用户确认后执行 \`/auok archive <change-id>\`。
+6. Dev Agent 读取 Spec handoff，自主修改项目代码和 auok scenarios，然后写 \`dev-to-qa.json\`。
+7. QA Agent 执行验证：validate、verify、run、grade、report、gate。失败写 \`qa-to-dev.json\`；成功时 Node 状态进入 \`qa_verified\`，并写 \`qa-to-review.json\`。
+8. Review Agent 审查 diff、规范、场景和证据。失败写 \`review-to-dev.json\`，成功写 \`review-to-archive.json\`。
+9. QA 或 Review 失败时，Orchestrator 自主协调 Dev/QA/Review 返工，直到成功或达到阻塞条件。
+10. Archive Agent 汇总证据、确认 Review 通过，并且只有在归档候选有效时才把状态置为 \`ready_for_archive\`。使用 \`${BACKEND_COMMAND} lifecycle ready-for-archive <change-id> --json\` 做确定性生命周期检查。
+11. 到 \`ready_for_archive\` 后停止，告诉用户确认后执行 \`/auok archive <change-id>\`。
 
-如果当前 ${toolName} 环境不支持独立子 Agent，必须把 change 标记为 blocked，并说明 \`/auok auto\` 默认需要子 Agent 能力。除非用户明确允许，不要降级为单 Agent 多角色执行。
+如果当前 ${toolName} 环境不支持独立子 Agent，必须把 change 标记为 blocked，并说明 \`/auok implement\` 默认需要子 Agent 能力。除非用户明确允许，不要降级为单 Agent 多角色执行。
 
 ## 硬性规则
 
@@ -331,7 +327,7 @@ Orchestrator 必须协调独立子 Agent。不要由一个 Agent 假装自己完
 - 用户入口是 \`/auok\`。Node 命令是当前 Agent 会话的实现细节。
 - 不要要求用户协调子 Agent。只有最终批准或真实阻塞才询问用户。
 - 不要要求用户手动调用 Spec、Dev、QA、Review 或 Archive 角色。
-- \`/auok auto\` 默认要求独立子 Agent。
+- \`/auok implement\` 默认要求独立子 Agent。
 
 ## 完成时汇报
 
@@ -352,8 +348,8 @@ function bodyTemplate(target, lang = "zh") {
 
 function codexSkillTemplate(lang = "zh") {
   const description = lang === "en"
-    ? "auok harness for OpenSpec + Superpowers driven multi-agent coding workflows. Use when the user invokes /auok or asks auok to run init, proposal, auto, or archive."
-    : "auok harness：基于 OpenSpec + Superpowers 的多 Agent 编码工作流。用户调用 /auok 或要求 auok 执行 init、proposal、auto、archive 时使用。";
+    ? "auok harness for OpenSpec + Superpowers driven multi-agent coding workflows. Use when the user invokes /auok or asks auok to run init, proposal, implement, or archive."
+    : "auok harness：基于 OpenSpec + Superpowers 的多 Agent 编码工作流。用户调用 /auok 或要求 auok 执行 init、proposal、implement、archive 时使用。";
   return `---
 name: auok
 description: ${description}
@@ -364,8 +360,8 @@ ${bodyTemplate("codex", lang)}`;
 
 function claudeCommandTemplate(lang = "zh") {
   const description = lang === "en"
-    ? "auok harness for OpenSpec + Superpowers driven multi-agent coding workflows. Use when the user invokes /auok or asks auok to run init, proposal, auto, or archive."
-    : "auok harness：基于 OpenSpec + Superpowers 的多 Agent 编码工作流。用户调用 /auok 或要求 auok 执行 init、proposal、auto、archive 时使用。";
+    ? "auok harness for OpenSpec + Superpowers driven multi-agent coding workflows. Use when the user invokes /auok or asks auok to run init, proposal, implement, or archive."
+    : "auok harness：基于 OpenSpec + Superpowers 的多 Agent 编码工作流。用户调用 /auok 或要求 auok 执行 init、proposal、implement、archive 时使用。";
   return `---
 name: 'auok'
 description: '${description}'
