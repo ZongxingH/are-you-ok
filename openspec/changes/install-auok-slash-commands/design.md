@@ -6,6 +6,7 @@ Install command/skill files where Codex and Claude actually discover them:
 
 - Codex: `~/.codex/skills/auok/SKILL.md`
 - Claude: `~/.claude/commands/auok.md`
+- Runtime: `~/.auok/runtime`
 
 Installed skills/commands:
 
@@ -20,7 +21,7 @@ The command files describe how the active Codex or Claude session should interpr
 3. Make `/auok init` model-driven: inspect the repo first, then call deterministic init for materialization.
 4. Expose only `/auok init`, `/auok proposal`, `/auok implement`, and `/auok archive` as user-facing commands.
 5. Keep Spec, Dev, QA, Review, and Archive role work internal to Orchestrator-controlled agent instructions.
-6. Use deterministic Node code only as an implementation detail for state, OpenSpec files, runs, reports, and gates.
+6. Use the local runtime under `~/.auok/runtime` as the deterministic implementation detail for state, OpenSpec files, runs, reports, and gates.
 7. For implementation requests, require an existing auok change created by `/auok proposal`.
 8. Act as Orchestrator and coordinate independent Architect/Spec/Dev/QA/Review/Archive agents through internal role instructions.
 9. Run validate/verify/run/grade/report/gate.
@@ -33,7 +34,7 @@ The command files describe how the active Codex or Claude session should interpr
 - `npm run auok -- install --target codex --lang zh --dry-run`
 - `npm run auok -- install --target claude --lang en --dry-run`
 - `npm run auok -- install --target all --lang zh`
-- Confirm command files are generated.
+- Confirm command files are generated and runtime files are installed under `~/.auok/runtime`.
 
 ## Risks
 

@@ -9,8 +9,9 @@ auok is intended to be used by large-model coding agents inside Codex and Claude
 - Add `auok install --target codex|claude|all`.
 - Add `--lang zh|en` for generated command language; default to `zh`.
 - Generate only the main Codex skill and Claude command files in their actual discovery locations.
+- Install the auok runtime under `~/.auok/runtime` so `/auok` commands call local code after install.
 - Remove stale role skills/commands from older installs so only `/auok` is exposed.
-- Use `npx github:ZongxingH/are-you-ok install ...` only for installing slash commands from GitHub; daily project work runs through `/auok`.
+- Use `npx github:ZongxingH/are-you-ok install ...` only for install/update; daily project work runs through `/auok` and the local runtime.
 - Instruct the current session Agent to act as Orchestrator and coordinate independent Spec/Dev/QA/Review/Archive agents internally.
 - Expose only `/auok init`, `/auok proposal`, `/auok implement`, and `/auok archive`; keep spec/dev/qa/review/archive role work internal to auok orchestration.
 

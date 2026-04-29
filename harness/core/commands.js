@@ -3,9 +3,11 @@ const os = require("os");
 const path = require("path");
 const { ensureDir, writeText } = require("./fs");
 
-const BACKEND_COMMAND = "npx github:ZongxingH/are-you-ok";
+const RUNTIME_DIR = path.join(os.homedir(), ".auok", "runtime");
+const BACKEND_COMMAND = `node ${path.join(RUNTIME_DIR, "harness", "cli", "main.js")}`;
 const SUPPORTED_LANGUAGES = new Set(["zh", "en"]);
 const INTERNAL_ROLE_IDS = ["architect", "spec", "dev", "qa", "review", "archive"];
+const RUNTIME_ENTRIES = ["package.json", "package-lock.json", "harness", "agent-orchestration", "openspec"];
 
 function englishBodyTemplate(target) {
   const toolName = target === "claude" ? "Claude Code" : "Codex";
@@ -34,7 +36,7 @@ The internal Node capability must stay deterministic. Do not move architecture a
 
 ## User-Facing Commands
 
-Only these `/auok` forms are user-facing:
+Only these \`/auok\` forms are user-facing:
 
 - \`/auok init\`
 - \`/auok proposal "define a concrete requirement"\`
@@ -45,9 +47,9 @@ Only these `/auok` forms are user-facing:
 
 ## Internal Node Execution
 
-The installed Codex skill / Claude command is workflow instruction only. It does not mean an \`auok\` executable is installed on PATH.
+The installed Codex skill / Claude command is workflow instruction. The deterministic runtime is installed locally under \`~/.auok/runtime\`.
 
-When deterministic execution is needed, run the auok Node capability from the project root with:
+When deterministic execution is needed, run the local auok Node capability from the project root with:
 
 \`\`\`bash
 ${BACKEND_COMMAND} <command>
@@ -91,7 +93,7 @@ the current session must act as the Orchestrator. Do not only forward the comman
 6. Every architecture conclusion must cite file evidence. If evidence is weak, mark it as unknown instead of guessing.
 7. Report project type, generated directories, architecture docs, and suggested next step.
 
-If the Node capability is available but fails, handle the error or report a blocker. Do not bypass it by hand-creating a partial auok workspace.
+If the local Node capability is available but fails, handle the error or report a blocker. Do not bypass it by hand-creating a partial auok workspace.
 
 ## Proposal Workflow
 
@@ -157,7 +159,7 @@ If the current ${toolName} environment does not support independent subagents, m
 - Do not merge, release, lower gates, delete large file sets, or change production configuration without explicit user approval.
 - Do not claim success without command evidence.
 - Keep all auok-generated project artifacts under \`auok/\`.
-- Do not hand-create the auok workspace when \`${BACKEND_COMMAND} init\` can run. Always prefer the Node capability for init/materialization.
+- Do not hand-create the auok workspace when \`${BACKEND_COMMAND} init\` can run. Always prefer the local Node capability for init/materialization.
 - The user-facing interface is \`/auok\`. Node commands are implementation details for the current Agent session.
 - The user must not be asked to coordinate subagents. Only ask the user for final approval or true blockers.
 - Do not ask the user to manually invoke Spec, Dev, QA, Review, or Archive roles.
@@ -218,9 +220,9 @@ auok 由三层组成：
 
 ## 内部 Node 执行
 
-安装到 Codex 的 Skill 或 Claude 的 Command 只是工作流指令，不代表本机 PATH 中已经存在 \`auok\` 可执行文件。
+安装到 Codex 的 Skill 或 Claude 的 Command 是工作流指令。确定性 runtime 会安装到本机 \`~/.auok/runtime\`。
 
-需要落盘、校验、运行场景、生成报告、gate、生命周期或 handoff 时，在项目根目录执行：
+需要落盘、校验、运行场景、生成报告、gate、生命周期或 handoff 时，在项目根目录执行本地 runtime：
 
 \`\`\`bash
 ${BACKEND_COMMAND} <command>
@@ -264,7 +266,7 @@ Node 命令只用于状态落盘、确定性校验、场景运行、报告、gat
 6. 每个架构结论都必须带文件证据；证据不足时标记为未知，不要猜。
 7. 用中文汇报项目类型、生成目录、架构文档和下一步建议。
 
-如果 Node 能力可执行但失败，先基于错误信息修复或报告阻塞；不要绕过 Node 手工拼一个不完整的 auok 工作区。
+如果本地 Node 能力可执行但失败，先基于错误信息修复或报告阻塞；不要绕过 Node 手工拼一个不完整的 auok 工作区。
 
 ## Proposal 工作流
 
@@ -323,7 +325,7 @@ Orchestrator 必须协调独立子 Agent。不要由一个 Agent 假装自己完
 - 没有明确批准，不要 merge、release、降低 gate、删除大批文件或修改生产配置。
 - 没有命令证据，不要声称成功。
 - 所有 auok 生成的项目产物必须放在 \`auok/\` 下。
-- 当 \`${BACKEND_COMMAND} init\` 可运行时，不要手工创建 auok 工作区；init 和确定性落盘优先使用 Node 能力。
+- 当 \`${BACKEND_COMMAND} init\` 可运行时，不要手工创建 auok 工作区；init 和确定性落盘优先使用本地 Node 能力。
 - 用户入口是 \`/auok\`。Node 命令是当前 Agent 会话的实现细节。
 - 不要要求用户协调子 Agent。只有最终批准或真实阻塞才询问用户。
 - 不要要求用户手动调用 Spec、Dev、QA、Review 或 Archive 角色。
@@ -402,6 +404,29 @@ function staleRoleFiles(item) {
   return [];
 }
 
+function repoRoot() {
+  return path.join(__dirname, "..", "..");
+}
+
+function copyRuntime(dryRun) {
+  const sourceRoot = repoRoot();
+  const targetRoot = RUNTIME_DIR;
+  if (path.resolve(sourceRoot) === path.resolve(targetRoot)) {
+    return { runtime: targetRoot, copied: false, reason: "source is runtime" };
+  }
+  if (dryRun) return { runtime: targetRoot, copied: false, dry_run: true };
+
+  ensureDir(targetRoot);
+  for (const entry of RUNTIME_ENTRIES) {
+    const source = path.join(sourceRoot, entry);
+    const target = path.join(targetRoot, entry);
+    if (!fs.existsSync(source)) continue;
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.cpSync(source, target, { recursive: true });
+  }
+  return { runtime: targetRoot, copied: true };
+}
+
 function installCommands(options = {}) {
   const target = options.target || "all";
   const lang = options.lang || "zh";
@@ -410,6 +435,7 @@ function installCommands(options = {}) {
   const supported = target === "all" ? ["codex", "claude"] : [target];
   const outputs = [];
   const stale = [];
+  const runtime = copyRuntime(dryRun);
 
   for (const item of supported) {
     for (const file of staleRoleFiles(item)) {
@@ -431,6 +457,7 @@ function installCommands(options = {}) {
     target,
     lang,
     dry_run: dryRun,
+    runtime,
     files: outputs,
     removed_stale_role_files: stale
   };

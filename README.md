@@ -21,6 +21,12 @@ npx github:ZongxingH/are-you-ok install --target claude --lang zh
 npx github:ZongxingH/are-you-ok install --target all --lang zh
 ```
 
+The install command also installs the local auok runtime under:
+
+```text
+~/.auok/runtime
+```
+
 Targets:
 
 ```text
@@ -45,6 +51,7 @@ npx github:ZongxingH/are-you-ok install --target all --lang zh
 ```
 
 This refreshes the main `/auok` entry and removes older role-specific auok commands from previous installs.
+It also refreshes the local runtime under `~/.auok/runtime`.
 
 ## Use
 
