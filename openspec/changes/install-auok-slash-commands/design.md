@@ -29,6 +29,9 @@ The command files describe how the active Codex or Claude session should interpr
 11. Write evidence to auok state and handoff files.
 12. Do not ask users to manually invoke Spec, Dev, QA, Review, or Archive roles.
 13. Do not archive, merge, release, or lower gates without explicit human approval.
+14. Require Archive Agent to write the standard `archive-to-human` handoff before `lifecycle ready-for-archive`; do not use ad hoc archive candidate files.
+15. Keep gate status values in runtime form, `pass` or `fail`; the runtime may tolerate `passed`, but generated workflow instructions must produce `pass`.
+16. Reject `/auok implement` when the argument is a raw requirement instead of a change id; do not silently switch to `/auok auto`.
 
 ## Verification
 

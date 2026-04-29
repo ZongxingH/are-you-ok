@@ -26,7 +26,7 @@ states:
     next: review_running
   review_running:
     agent: review
-    command: auok agent handoff {change} --from review --to archive --status pass --summary "review passed" --evidence "auok/orchestration/states/{change}.json" --required-action "prepare archive candidate" --commands "auok validate {change},auok verify {change}" --next-state ready_for_archive
+    command: auok agent handoff {change} --from review --to archive --status pass --summary "review passed" --evidence "auok/orchestration/states/{change}.json" --required-action "prepare archive-to-human handoff" --commands "auok validate {change},auok verify {change}" --next-state ready_for_archive
     on_pass: ready_for_archive
     on_fail: fixing
   fixing:
@@ -34,6 +34,8 @@ states:
     next: qa_running
   ready_for_archive:
     agent: archive
-    command: auok lifecycle ready-for-archive {change}
+    commands:
+      - auok agent handoff {change} --from archive --to human --status ready --summary "archive candidate ready" --evidence "auok/orchestration/states/{change}.json,auok/orchestration/handoffs/{change}/review-to-archive.json" --required-action "human confirms /auok archive {change}" --commands "auok validate {change},auok verify {change},auok lifecycle ready-for-archive {change}" --next-state ready_for_archive
+      - auok lifecycle ready-for-archive {change}
     requires_human_approval: true
     next: waiting_human_approval

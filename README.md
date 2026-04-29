@@ -91,4 +91,6 @@ Stepwise flow:
 /auok archive add-weather-tool-eval
 ```
 
-`/auok implement` requires an existing proposal. It does not accept new proposal content and does not create or rewrite the proposal phase. Use `/auok auto "需求"` when you want auok to run init, proposal, and implementation in one command.
+`/auok auto "需求"` starts from a raw requirement and may initialize, create the proposal, and implement it in one flow.
+
+`/auok implement <change-id>` only continues an existing proposal. It does not accept new proposal content and does not create or rewrite the proposal phase.

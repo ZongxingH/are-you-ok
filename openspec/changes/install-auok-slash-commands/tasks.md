@@ -8,5 +8,7 @@
 - [x] Add command language selection with Chinese default.
 - [x] Clarify model-driven `/auok init` behavior.
 - [x] Add `/auok auto "需求"` full-flow instructions.
+- [x] Make `/auok auto` and `/auok implement` boundaries explicit.
+- [x] Clarify `archive-to-human` handoff and gate status requirements.
 - [x] Keep role agents internal and clean stale role commands from older installs.
 - [x] Update README and方案.

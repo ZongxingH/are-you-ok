@@ -15,6 +15,8 @@ auok is intended to be used by large-model coding agents inside Codex and Claude
 - Instruct the current session Agent to act as Orchestrator and coordinate independent Spec/Dev/QA/Review/Archive agents internally.
 - Expose only `/auok init`, `/auok proposal`, `/auok auto`, `/auok implement`, and `/auok archive`; keep spec/dev/qa/review/archive role work internal to auok orchestration.
 - Add `/auok auto "需求"` as the full flow that initializes when needed, creates or refines the proposal, implements it, and stops before manual archive.
+- Keep `/auok implement <change-id>` as the implementation-only flow for an existing proposal; reject raw requirements passed to `implement`.
+- Require Archive Agent to produce the standard `archive-to-human` handoff before `ready_for_archive`.
 
 ## Out of Scope
 

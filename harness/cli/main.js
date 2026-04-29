@@ -144,10 +144,10 @@ function validateGateEvidence(state, errors) {
       if (typeof summary.pass_rate !== "number") errors.push(`Gate summary missing pass_rate: ${summaryFile}`);
       if (typeof summary.critical_failures !== "number") errors.push(`Gate summary missing critical_failures: ${summaryFile}`);
       if (!Array.isArray(summary.results)) errors.push(`Gate summary missing results: ${summaryFile}`);
-      if (auokGate.status === "pass" && Array.isArray(auokGate.failures) && auokGate.failures.length > 0) {
+      if (lifecycle.isPassedStatus(auokGate.status) && Array.isArray(auokGate.failures) && auokGate.failures.length > 0) {
         errors.push(`auok_gate is pass but has failures in state: ${state.change}`);
       }
-      if (auokGate.status === "pass" && summary.critical_failures > 0) {
+      if (lifecycle.isPassedStatus(auokGate.status) && summary.critical_failures > 0) {
         errors.push(`auok_gate is pass but summary has critical failures: ${summaryFile}`);
       }
     } catch (error) {

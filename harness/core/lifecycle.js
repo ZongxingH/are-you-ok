@@ -193,7 +193,7 @@ function markAgent(state, agent, status, extra = {}) {
 function markGate(state, gate, status, extra = {}) {
   state.gates[gate] = {
     ...(state.gates[gate] || {}),
-    status,
+    status: normalizeGateStatus(status),
     updated_at: new Date().toISOString(),
     ...extra
   };
@@ -261,6 +261,10 @@ function isPassedStatus(status) {
   return ["pass", "passed", "done", "ready"].includes(String(status || "").toLowerCase());
 }
 
+function normalizeGateStatus(status) {
+  return isPassedStatus(status) ? "pass" : String(status || "pending").toLowerCase();
+}
+
 function hasBlockingFindings(handoff) {
   return Boolean(handoff && Array.isArray(handoff.blocking_findings) && handoff.blocking_findings.length > 0);
 }
@@ -274,10 +278,10 @@ function readyForArchive(change) {
   const reviewHandoff = readHandoff(change, "review", "archive");
   const archiveHandoff = readHandoff(change, "archive", "human");
 
-  if (!openspec || openspec.status !== "pass") errors.push("openspec_validate gate is not pass");
-  if (!auokGate || auokGate.status !== "pass") errors.push("auok_gate is not pass");
+  if (!openspec || !isPassedStatus(openspec.status)) errors.push("openspec_validate gate is not pass");
+  if (!auokGate || !isPassedStatus(auokGate.status)) errors.push("auok_gate is not pass");
   if (auokGate && Array.isArray(auokGate.failures) && auokGate.failures.length > 0) errors.push("auok_gate has failures");
-  if (!((reviewGate && reviewGate.status === "pass") || isPassedStatus(reviewHandoff && reviewHandoff.status))) {
+  if (!((reviewGate && isPassedStatus(reviewGate.status)) || isPassedStatus(reviewHandoff && reviewHandoff.status))) {
     errors.push("review is not passed");
   }
   if (!isPassedStatus(archiveHandoff && archiveHandoff.status)) errors.push("archive-to-human handoff is not ready");
@@ -359,6 +363,7 @@ module.exports = {
   createHandoff,
   block,
   inferNext,
+  isPassedStatus,
   loadState,
   markAgent,
   markGate,
