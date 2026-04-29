@@ -7,7 +7,8 @@
     "auok": "harness/cli/main.js"
   },
   "scripts": {
-    "auok": "node harness/cli/main.js"
+    "auok": "node harness/cli/main.js",
+    "test": "node --test"
   },
   "devDependencies": {},
   "engines": {

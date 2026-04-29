@@ -273,12 +273,14 @@ function readyForArchive(change) {
   const state = loadState(change);
   const errors = [];
   const openspec = state.gates && state.gates.openspec_validate;
+  const unitTests = state.gates && state.gates.unit_tests;
   const auokGate = state.gates && state.gates.auok_gate;
   const reviewGate = state.gates && state.gates.review;
   const reviewHandoff = readHandoff(change, "review", "archive");
   const archiveHandoff = readHandoff(change, "archive", "human");
 
   if (!openspec || !isPassedStatus(openspec.status)) errors.push("openspec_validate gate is not pass");
+  if (!unitTests || !isPassedStatus(unitTests.status)) errors.push("unit_tests gate is not pass");
   if (!auokGate || !isPassedStatus(auokGate.status)) errors.push("auok_gate is not pass");
   if (auokGate && Array.isArray(auokGate.failures) && auokGate.failures.length > 0) errors.push("auok_gate has failures");
   if (!((reviewGate && isPassedStatus(reviewGate.status)) || isPassedStatus(reviewHandoff && reviewHandoff.status))) {
@@ -362,6 +364,7 @@ module.exports = {
   createChange,
   createHandoff,
   block,
+  handoffFile,
   inferNext,
   isPassedStatus,
   loadState,

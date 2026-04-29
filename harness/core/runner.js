@@ -9,7 +9,8 @@ async function run(options) {
   const adapter = loadAdapter(adapterName);
 
   let scenarios;
-  if (options.scenarioId) scenarios = [findScenario(options.scenarioId)];
+  if (options.scenarioIds) scenarios = options.scenarioIds.map((id) => findScenario(id));
+  else if (options.scenarioId) scenarios = [findScenario(options.scenarioId)];
   else scenarios = listScenarios({ capability: options.capability });
 
   if (scenarios.length === 0) throw new Error("No scenarios matched run options");

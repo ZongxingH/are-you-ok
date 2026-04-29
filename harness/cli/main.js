@@ -92,9 +92,7 @@ function createChange(change, goal = "") {
 function validate(options = {}) {
   const errors = [];
   const specsDir = home.resolveInHome("openspec", "specs");
-  const scenarioFiles = listFiles(home.resolveInHome("harness", "scenarios"), (file) => /\.(ya?ml|json)$/.test(file));
   if (!fs.existsSync(specsDir)) errors.push(`Missing ${path.relative(process.cwd(), specsDir)}`);
-  if (scenarioFiles.length === 0) errors.push("No scenarios found");
   try {
     listScenarios({});
   } catch (error) {
@@ -154,6 +152,107 @@ function validateGateEvidence(state, errors) {
       errors.push(`Invalid gate summary ${summaryFile}: ${error.message}`);
     }
   }
+}
+
+function readDevHandoff(change) {
+  const file = lifecycle.handoffFile(change, "dev", "qa");
+  if (!fs.existsSync(file)) return null;
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function collectCommandStrings(value) {
+  if (!value) return [];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap((item) => collectCommandStrings(item));
+  if (typeof value === "object") {
+    return ["command", "cmd", "script"].flatMap((key) => collectCommandStrings(value[key]));
+  }
+  return [];
+}
+
+function evaluateUnitTestEvidence(change) {
+  const handoff = readDevHandoff(change);
+  if (!handoff || handoff.status === "draft") {
+    return {
+      passed: false,
+      failures: ["Missing ready dev-to-qa handoff with unit test evidence"],
+      commands: []
+    };
+  }
+
+  const commands = [
+    ...collectCommandStrings(handoff.commands_to_reproduce),
+    ...collectCommandStrings(handoff.verification_performed)
+  ];
+  const skipPatterns = [
+    /(^|\s)-DskipTests(=true)?(\s|$)/,
+    /(^|\s)-Dmaven\.test\.skip(=true)?(\s|$)/,
+    /(^|\s)--skip-tests(\s|$)/,
+    /(^|\s)--skipTests(\s|$)/,
+    /(^|\s)-x\s+test(\s|$)/,
+    /(^|\s)SKIP_TESTS=true(\s|$)/,
+    /(^|\s)CI_SKIP_TESTS=true(\s|$)/
+  ];
+  const testPatterns = [
+    /(^|\s)(npm|pnpm|yarn)\s+(run\s+)?test(:\S+)?(\s|$)/,
+    /(^|\s)mvn\s+.*\b(test|verify|package|install)\b/,
+    /(^|\s)(gradle|\.\/gradlew)\s+.*\b(test|check|build)\b/,
+    /(^|\s)go\s+test(\s|$)/,
+    /(^|\s)pytest(\s|$)/,
+    /(^|\s)cargo\s+test(\s|$)/,
+    /(^|\s)dotnet\s+test(\s|$)/,
+    /(^|\s)phpunit(\s|$)/,
+    /(^|\s)(bundle\s+exec\s+)?rspec(\s|$)/,
+    /(^|\s)mix\s+test(\s|$)/,
+    /(^|\s)swift\s+test(\s|$)/,
+    /(^|\s)xcodebuild\s+.*\btest\b/
+  ];
+
+  const skipped = commands.filter((command) => skipPatterns.some((pattern) => pattern.test(command)));
+  const testCommands = commands.filter((command) => testPatterns.some((pattern) => pattern.test(command)));
+  const failures = [];
+  if (skipped.length > 0) failures.push(`Unit test evidence skips tests: ${skipped.join("; ")}`);
+  if (testCommands.length === 0) failures.push("No unit test command evidence found in dev-to-qa handoff");
+
+  return {
+    passed: failures.length === 0,
+    failures,
+    commands
+  };
+}
+
+function selectVerificationRun(change, args = {}) {
+  if (args.scenario) {
+    return {
+      options: { scenarioId: args.scenario },
+      command: `auok run ${args.scenario} --adapter ${args.adapter || "mock"}`
+    };
+  }
+  if (args.capability) {
+    return {
+      options: { capability: args.capability },
+      command: `auok run --capability ${args.capability} --adapter ${args.adapter || "mock"}`
+    };
+  }
+
+  const scenarios = listScenarios({}).filter((scenario) => {
+    const tags = Array.isArray(scenario.tags) ? scenario.tags : [];
+    return scenario.id === change ||
+      scenario.id.startsWith(`${change}.`) ||
+      scenario.capability === change ||
+      tags.includes(change);
+  });
+
+  if (scenarios.length === 0) {
+    return {
+      error: `No verification scenarios found for change ${change}. Add a scenario whose id starts with "${change}.", whose capability is "${change}", or whose tags include "${change}", or pass --scenario/--capability explicitly.`
+    };
+  }
+
+  return {
+    options: { scenarioIds: scenarios.map((scenario) => scenario.id) },
+    command: `auok run ${scenarios.map((scenario) => scenario.id).join(",")} --adapter ${args.adapter || "mock"}`
+  };
 }
 
 async function main() {
@@ -315,15 +414,42 @@ async function verifyChange(change, args = {}) {
     return { change, passed: false, validate: validation, next: lifecycle.inferNext(state) };
   }
 
+  const unitEvidence = evaluateUnitTestEvidence(change);
+  lifecycle.markGate(state, "unit_tests", unitEvidence.passed ? "pass" : "fail", {
+    commands: unitEvidence.commands,
+    failures: unitEvidence.failures
+  });
+  lifecycle.addEvidence(state, { type: "unit_tests", result: unitEvidence });
+  if (!unitEvidence.passed) {
+    state.state = "qa_failed";
+    state.retry_count = Number(state.retry_count || 0) + 1;
+    lifecycle.markAgent(state, "qa", "failed", { reason: "unit test evidence failed" });
+    lifecycle.createHandoff(change, "qa", "dev");
+    lifecycle.saveState(state);
+    return { change, passed: false, validate: validation, unit_tests: unitEvidence, next: lifecycle.inferNext(state) };
+  }
+
+  const verificationRun = selectVerificationRun(change, args);
+  if (verificationRun.error) {
+    const gateResult = { passed: false, failures: [verificationRun.error] };
+    lifecycle.markGate(state, "auok_gate", "fail", gateResult);
+    lifecycle.addEvidence(state, { type: "run", skipped: true, reason: verificationRun.error });
+    state.state = "qa_failed";
+    state.retry_count = Number(state.retry_count || 0) + 1;
+    lifecycle.markAgent(state, "qa", "failed", { reason: verificationRun.error });
+    lifecycle.createHandoff(change, "qa", "dev");
+    lifecycle.saveState(state);
+    return { change, passed: false, validate: validation, unit_tests: unitEvidence, gate: gateResult, next: lifecycle.inferNext(state) };
+  }
+
   const outDir = args.out || change;
   const runResult = await run({
-    scenarioId: args.scenario,
-    capability: args.capability || "smoke",
+    ...verificationRun.options,
     adapter: args.adapter || "mock",
     out: outDir
   });
   const resolvedOutDir = runResult.outDir;
-  lifecycle.addEvidence(state, { type: "run", command: `auok run --capability ${args.capability || "smoke"} --adapter ${args.adapter || "mock"} --out ${outDir}`, result: runResult });
+  lifecycle.addEvidence(state, { type: "run", command: `${verificationRun.command} --out ${outDir}`, result: runResult });
 
   const gradeResult = await gradeRun(resolvedOutDir);
   lifecycle.addEvidence(state, { type: "grade", command: `auok grade ${resolvedOutDir}`, result: { total: gradeResult.total, passed: gradeResult.passed, failed: gradeResult.failed } });
@@ -378,12 +504,6 @@ async function verifyChange(change, args = {}) {
     gate: { passed: gateResult.passed, failures: gateResult.failures },
     next: lifecycle.inferNext(state)
   };
-}
-
-function copyFileIfMissing(source, target) {
-  if (fs.existsSync(target)) return;
-  ensureDir(path.dirname(target));
-  fs.copyFileSync(source, target);
 }
 
 const IGNORE_PROJECT_ENTRIES = new Set([
@@ -549,12 +669,9 @@ function initHome(options = {}) {
     "architecture",
     "openspec/specs",
     "openspec/changes/archive",
-    "orchestration/workflows",
     "orchestration/states",
-    "orchestration/contracts",
     "orchestration/handoffs",
     "harness/scenarios",
-    "harness/schemas",
     "runs/baseline"
   ];
   for (const dir of dirs) ensureDir(home.resolveInHome(dir));
@@ -565,24 +682,6 @@ function initHome(options = {}) {
     created_at: new Date().toISOString()
   });
 
-  const repoRoot = path.join(__dirname, "..", "..");
-  for (const file of listFiles(path.join(repoRoot, "openspec", "specs"), (candidate) => candidate.endsWith("spec.md"))) {
-    const relative = path.relative(path.join(repoRoot, "openspec", "specs"), file);
-    copyFileIfMissing(file, home.resolveInHome("openspec", "specs", relative));
-  }
-  for (const file of listFiles(path.join(repoRoot, "agent-orchestration", "workflows"), (candidate) => candidate.endsWith(".yaml"))) {
-    copyFileIfMissing(file, home.resolveInHome("orchestration", "workflows", path.basename(file)));
-  }
-  for (const file of listFiles(path.join(repoRoot, "agent-orchestration", "contracts"), (candidate) => candidate.endsWith(".md"))) {
-    copyFileIfMissing(file, home.resolveInHome("orchestration", "contracts", path.basename(file)));
-  }
-  for (const file of listFiles(path.join(repoRoot, "harness", "schemas"), (candidate) => candidate.endsWith(".json"))) {
-    copyFileIfMissing(file, home.resolveInHome("harness", "schemas", path.basename(file)));
-  }
-  for (const file of listFiles(path.join(repoRoot, "harness", "scenarios"), (candidate) => /\.(ya?ml|json)$/.test(candidate))) {
-    const relative = path.relative(path.join(repoRoot, "harness", "scenarios"), file);
-    copyFileIfMissing(file, home.resolveInHome("harness", "scenarios", relative));
-  }
   const architecture = writeArchitectureDocs({ lang });
 
   return {
