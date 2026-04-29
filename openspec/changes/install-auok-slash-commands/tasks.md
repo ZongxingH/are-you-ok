@@ -7,5 +7,6 @@
 - [x] Install local runtime under `~/.auok/runtime`.
 - [x] Add command language selection with Chinese default.
 - [x] Clarify model-driven `/auok init` behavior.
+- [x] Add `/auok auto "需求"` full-flow instructions.
 - [x] Keep role agents internal and clean stale role commands from older installs.
 - [x] Update README and方案.

@@ -60,6 +60,7 @@ Use auok inside Codex or Claude:
 ```text
 /auok init
 /auok proposal "需求"
+/auok auto "需求"
 /auok implement <change-id>
 /auok archive <change-id>
 ```
@@ -69,11 +70,19 @@ Workflow:
 ```text
 init      -> create the project auok workspace and architecture context
 proposal  -> create or refine an OpenSpec change, then stop before implementation
+auto      -> initialize if needed, create the proposal, implement it, then stop before archive
 implement -> implement an existing proposal through Dev, QA, Review, and Archive agents
 archive   -> final user confirmation after the change reaches ready_for_archive
 ```
 
-Typical flow:
+Fully automatic flow:
+
+```text
+/auok auto "新增天气工具调用评测"
+/auok archive add-weather-tool-eval
+```
+
+Stepwise flow:
 
 ```text
 /auok init
@@ -82,4 +91,4 @@ Typical flow:
 /auok archive add-weather-tool-eval
 ```
 
-`/auok implement` requires an existing proposal. It does not accept new proposal content and does not create or rewrite the proposal phase.
+`/auok implement` requires an existing proposal. It does not accept new proposal content and does not create or rewrite the proposal phase. Use `/auok auto "需求"` when you want auok to run init, proposal, and implementation in one command.

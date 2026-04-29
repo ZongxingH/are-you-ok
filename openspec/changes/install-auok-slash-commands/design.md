@@ -19,15 +19,16 @@ The command files describe how the active Codex or Claude session should interpr
 1. Treat `/auok` as the user-facing entry.
 2. Use Chinese instructions by default; allow English via `--lang en`.
 3. Make `/auok init` model-driven: inspect the repo first, then call deterministic init for materialization.
-4. Expose only `/auok init`, `/auok proposal`, `/auok implement`, and `/auok archive` as user-facing commands.
+4. Expose only `/auok init`, `/auok proposal`, `/auok auto`, `/auok implement`, and `/auok archive` as user-facing commands.
 5. Keep Spec, Dev, QA, Review, and Archive role work internal to Orchestrator-controlled agent instructions.
 6. Use the local runtime under `~/.auok/runtime` as the deterministic implementation detail for state, OpenSpec files, runs, reports, and gates.
-7. For implementation requests, require an existing auok change created by `/auok proposal`.
-8. Act as Orchestrator and coordinate independent Architect/Spec/Dev/QA/Review/Archive agents through internal role instructions.
-9. Run validate/verify/run/grade/report/gate.
-10. Write evidence to auok state and handoff files.
-11. Do not ask users to manually invoke Spec, Dev, QA, Review, or Archive roles.
-12. Do not archive, merge, release, or lower gates without explicit human approval.
+7. For `/auok auto "需求"`, initialize when needed, run proposal, run implementation, and stop at `ready_for_archive`.
+8. For `/auok implement <change-id>`, require an existing auok change created by `/auok proposal` or `/auok auto`; do not create or rewrite proposal content.
+9. Act as Orchestrator and coordinate independent Architect/Spec/Dev/QA/Review/Archive agents through internal role instructions.
+10. Run validate/verify/run/grade/report/gate.
+11. Write evidence to auok state and handoff files.
+12. Do not ask users to manually invoke Spec, Dev, QA, Review, or Archive roles.
+13. Do not archive, merge, release, or lower gates without explicit human approval.
 
 ## Verification
 
